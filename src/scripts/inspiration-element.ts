@@ -71,7 +71,59 @@ styleSheet.replaceSync(/*css*/`
     border-color: #D06767;
   }
 `);
-UtilsLog.debug(String(styleSheet))
+
+interface Stoppable {
+  stop: () => void;
+}
+
+class CallbackGroup<T extends Function> {
+  #nextId = 0;
+  #callbacks = new Map<number, T>();
+  
+  public register(callback: T): Stoppable {
+    const id = this.#nextId++;
+    this.#callbacks.set(id, callback);
+
+    return this.#getIUnregisterTrigger(id);
+  }
+
+  public getCallbacks(): Array<T> {
+    const callbackIds = Array.from(this.#callbacks.keys()).sort();
+    const callbacks = [];
+    for (const callbackId of callbackIds) {
+      callbacks.push(this.#callbacks.get(callbackId));
+    }
+    return callbacks;
+  }
+
+  public isEmpty(): boolean {
+    return this.#callbacks.size === 0;
+  }
+  
+  #getIUnregisterTrigger(id: number): Stoppable {
+    return {
+      stop: () => {
+        this.#callbacks.delete(id);
+      }
+    }
+  }
+}
+
+type PostUpdateActorCb = (actor: ActorV11, diff: object, options: object, userId: string) => void;
+const actorCallbacks = new CallbackGroup<PostUpdateActorCb>();
+Hooks.on('updateActor', (...args: Parameters<PostUpdateActorCb>) => {
+  for (const cb of actorCallbacks.getCallbacks()) {
+    cb(...args);
+  }
+});
+
+type PostUpdateChatMessageCb = (msg: ChatMessageV11, diff: object, options: object, userId: string) => void;
+const chatMessageCallbacks = new CallbackGroup<PostUpdateChatMessageCb>();
+Hooks.on('updateChatMessage', (...args: Parameters<PostUpdateChatMessageCb>) => {
+  for (const cb of chatMessageCallbacks.getCallbacks()) {
+    cb(...args);
+  }
+});
 
 export class InspirationElement extends HTMLElement {
 
@@ -93,9 +145,14 @@ export class InspirationElement extends HTMLElement {
     this.#startRender();
   }
 
+  #documentListeners: Stoppable[] = [];
+  #msg: ChatMessageV11;
+  #actor: ActorV11;
   #renderStateChanged = false;
   #renderState: RenderState | null = null;
   #startRender(): Promise<void> {
+    this.#msg = null;
+    this.#actor = null;
     const msgId = this.closest(`[data-message-id]`)?.getAttribute('data-message-id');
     if (!msgId) {
       this.#calcRenderState();
@@ -104,35 +161,59 @@ export class InspirationElement extends HTMLElement {
     }
     const msg: ChatMessageV11 = game.messages.get(msgId) as any;
     if (!msg) {
-      this.#calcRenderState(msg);
+      this.#calcRenderState();
       this.#execRender();
       return;
     }
 
     const actor: ActorV11 = game.scenes.get(msg.speaker.scene)?.tokens?.get(msg.speaker.token)?.actor || game.actors.get(msg.speaker.actor);
     if (!actor) {
-      this.#calcRenderState(msg, actor);
+      this.#calcRenderState();
       this.#execRender();
       return;
     }
 
-    this.#calcRenderState(msg, actor);
+    for (const documentListener of this.#documentListeners) {
+      documentListener.stop();
+    }
+
+    actorCallbacks.register((cbActor) => {
+      if (cbActor.uuid === actor.uuid) {
+        this.#actor = cbActor;
+        this.#calcRenderState();
+        this.#execRender();
+      }
+    });
+
+    chatMessageCallbacks.register((cbMsg) => {
+      if (cbMsg.uuid === actor.uuid) {
+        this.#msg = cbMsg;
+        this.#calcRenderState();
+        this.#execRender();
+      }
+    });
+
+    this.#msg = msg;
+    this.#actor = actor;
+
+    this.#calcRenderState();
     this.#execRender();
   }
 
-  /** @returns true if the state changed */
-  #calcRenderState(msg?: ChatMessageV11, actor?: ActorV11): void {
+  #calcRenderState(): void {
     let newState: RenderState;
-    if (msg == null || actor == null) {
+    if (this.#msg == null || this.#actor == null) {
       newState = null;
-    } else if (!actor.testUserPermission(game.user, 'OBSERVER')) {
+    } else if (!this.#actor.testUserPermission(game.user, 'OBSERVER')) {
       newState = null;
-    } else if (!msg.rolls.find(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0))) {
+    } else if (this.#actor.type !== 'character') {
+      newState = null;
+    } else if (!this.#msg.rolls.find(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0))) {
       newState = null;
     } else {
       newState = {
         playerType: game.user.isGM ? 'gm' : 'player',
-        hasInspiration: !!actor.system.attributes.inspiration,
+        hasInspiration: !!this.#actor.system.attributes.inspiration,
       }
     }
 
@@ -142,7 +223,6 @@ export class InspirationElement extends HTMLElement {
 
   #shadow: ShadowRoot;
   #execRender(): void {
-    // UtilsLog.debug({renderStateChanged: this.#renderStateChanged, renderState: this.#renderState})
     if (!this.#renderStateChanged) {
       return;
     }
@@ -151,9 +231,8 @@ export class InspirationElement extends HTMLElement {
       this.#shadow.adoptedStyleSheets = [styleSheet];
     }
     this.#shadow.innerHTML = '';
-    // this.#shadow.append(new DOMParser().parseFromString(`<pre>renderState: ${JSON.stringify(this.#renderState, null, 2)}</pre>`, 'text/html').querySelector('pre'))
 
-    switch (this.#renderState.playerType) {
+    switch (this.#renderState?.playerType) {
       case 'gm': {
         if (!this.#renderState.hasInspiration) {
           this.#shadow.append(new DOMParser().parseFromString(/*html*/`
