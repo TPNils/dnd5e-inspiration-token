@@ -6,6 +6,48 @@ interface RenderState {
   hasInspiration: boolean,
 };
 
+const styleSheet = new CSSStyleSheet();
+styleSheet.replaceSync(/*css*/`
+  .wrapper {
+    width: auto;
+    height: auto;
+    padding: 10px;
+    margin-top: 0.25rem;
+    line-height: 1.8;
+    border-radius: 5px;
+    
+    text-align: center;
+    font-size: var(--font-size-11);
+    font-family: var(--dnd5e-font-roboto);
+
+    cursor: pointer;
+  }
+  
+  .player {
+    background-color: #EFE;
+    border: 1px solid #DDD;
+    color: #999;
+  }
+
+  .player:hover {
+    background-color: rgb(166, 219, 166);
+    border-color: rgb(60, 151, 9);
+    color: rgb(85, 85, 85);
+  }
+
+  .gm {
+    background-color: #FEE;
+    border: 1px solid #EDD;
+    color: #A66;
+  }
+
+  .gm:hover {
+    background-color: rgb(245, 214, 214);
+    border-color: #D06767;
+  }
+`);
+UtilsLog.debug(String(styleSheet))
+
 export class InspirationElement extends HTMLElement {
 
   public static get tag(): string {
@@ -44,30 +86,27 @@ export class InspirationElement extends HTMLElement {
 
     const actor: ActorV11 = game.scenes.get(msg.speaker.scene)?.tokens?.get(msg.speaker.token)?.actor || game.actors.get(msg.speaker.actor);
     if (!actor) {
-      this.#calcRenderState(msg, null, actor);
+      this.#calcRenderState(msg, actor);
       this.#execRender();
       return;
     }
 
-    const user = (typeof msg.user === 'string' ? game.users.get(msg.user) : msg.user);
-    this.#calcRenderState(msg, user, actor);
+    this.#calcRenderState(msg, actor);
     this.#execRender();
   }
 
   /** @returns true if the state changed */
-  #calcRenderState(msg?: ChatMessageV11, user?: User, actor?: ActorV11): void {
+  #calcRenderState(msg?: ChatMessageV11, actor?: ActorV11): void {
     let newState: RenderState;
-    if (msg == null || user == null || actor == null) {
+    if (msg == null || actor == null) {
       newState = null;
-    } else if (!actor.testUserPermission(user, 'OBSERVER')) {
+    } else if (!actor.testUserPermission(game.user, 'OBSERVER')) {
       newState = null;
     } else if (!msg.rolls.find(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0))) {
       newState = null;
-    } else if (!(actor as any).testUserPermission(user, 'OBSERVER')) {
-      newState = null;
     } else {
       newState = {
-        playerType: user.isGM ? 'gm' : 'player',
+        playerType: game.user.isGM ? 'gm' : 'player',
         hasInspiration: !!actor.system.attributes.inspiration,
       }
     }
@@ -83,14 +122,35 @@ export class InspirationElement extends HTMLElement {
       return;
     }
     if (this.#shadow == null) {
-      this.#shadow = this.attachShadow({mode: 'closed'})
+      this.#shadow = this.attachShadow({mode: 'closed'});
+      this.#shadow.adoptedStyleSheets = [styleSheet];
     }
-    
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `<pre>renderState: ${JSON.stringify(this.#renderState, null, 2)}</pre>`;
-
     this.#shadow.innerHTML = '';
-    this.#shadow.append(wrapper);
+    // this.#shadow.append(new DOMParser().parseFromString(`<pre>renderState: ${JSON.stringify(this.#renderState, null, 2)}</pre>`, 'text/html').querySelector('pre'))
+
+    switch (this.#renderState.playerType) {
+      case 'gm': {
+        if (!this.#renderState.hasInspiration) {
+          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
+            <div class="wrapper gm">
+              Reactivate inspiration & reroll highest d20
+            </div>
+          `, 'text/html').querySelector('.wrapper'));
+        }
+        break;
+      }
+      case 'player': {
+        if (this.#renderState.hasInspiration) {
+          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
+            <div class="wrapper player">
+              Consume inspiration & reroll lowest d20
+            </div>
+          `, 'text/html').querySelector('.wrapper'));
+        }
+        break;
+      }
+    }
+
     this.#renderStateChanged = false;
   }
 
