@@ -1,0 +1,44 @@
+{
+  "id": "inspiration-token",
+  "title": "Inspiration token",
+  "version": "0.0.0",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "11"
+  },
+  "description": "",
+  "authors": [
+    {
+      "name": "TPNils"
+    }
+  ],
+  "url": "",
+  "manifest": "",
+  "download": "",
+  "bugs": "",
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "relationships": {
+    "requires": [],
+    "recommends": [],
+    "systems": [
+      {
+        "id": "dnd5e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "3.0.0",
+          "verified": "3.2.1"
+        }
+      }
+    ]
+  },
+  "socket": false
+}
