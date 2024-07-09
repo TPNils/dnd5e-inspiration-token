@@ -23,6 +23,28 @@ styleSheet.replaceSync(/*css*/`
 
     cursor: pointer;
   }
+  
+  .wrapper.active {
+    background-color: #EFE;
+    border: 1px solid #DDD;
+    color: #999;
+  }
+  .wrapper:not(.active) {
+    background-color: #FEE;
+    border: 1px solid #EDD;
+    color: #A66;
+  }
+
+  .wrapper.active:hover {
+    background-color: rgb(166, 219, 166);
+    border-color: rgb(60, 151, 9);
+    color: rgb(85, 85, 85);
+  }
+
+  .wrapper:not(.active):hover {
+    background-color: rgb(245, 214, 214);
+    border-color: #D06767;
+  }
 
   .inspiration {
     --size: calc(var(--font-size-11) * 2);
@@ -37,38 +59,16 @@ styleSheet.replaceSync(/*css*/`
     display: grid;
     place-content: center;
     transform: translate(-25%, -50%);
+    cursor: pointer;
   }
 
-  .inspiration.active::after {
+  .active .inspiration::after {
     content: "";
     width: calc(var(--size) / 4 - 1px);
     height: calc(var(--size) / 4 - 1px);
     background: white;
     transform: rotate(45deg);
     box-shadow: 0 0 8px 3px var(--color-shadow-highlight);
-  }
-  
-  .player {
-    background-color: #EFE;
-    border: 1px solid #DDD;
-    color: #999;
-  }
-
-  .player:hover {
-    background-color: rgb(166, 219, 166);
-    border-color: rgb(60, 151, 9);
-    color: rgb(85, 85, 85);
-  }
-
-  .gm {
-    background-color: #FEE;
-    border: 1px solid #EDD;
-    color: #A66;
-  }
-
-  .gm:hover {
-    background-color: rgb(245, 214, 214);
-    border-color: #D06767;
   }
 `);
 
@@ -204,7 +204,7 @@ export class InspirationElement extends HTMLElement {
     let newState: RenderState;
     if (this.#msg == null || this.#actor == null) {
       newState = null;
-    } else if (!this.#actor.testUserPermission(game.user, 'OBSERVER')) {
+    } else if (!this.#actor.testUserPermission(game.user, 'OWNER')) {
       newState = null;
     } else if (this.#actor.type !== 'character') {
       newState = null;
@@ -221,6 +221,7 @@ export class InspirationElement extends HTMLElement {
     this.#renderState = newState;
   }
 
+  #stateChanged = false;
   #shadow: ShadowRoot;
   #execRender(): void {
     if (!this.#renderStateChanged) {
@@ -232,29 +233,44 @@ export class InspirationElement extends HTMLElement {
     }
     this.#shadow.innerHTML = '';
 
-    switch (this.#renderState?.playerType) {
-      case 'gm': {
-        if (!this.#renderState.hasInspiration) {
-          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-            <div class="wrapper gm">
-              Reactivate inspiration & reroll highest d20
-              <span class="inspiration"></span>
-            </div>
-          `, 'text/html').querySelector('.wrapper'));
+    const render = this.#stateChanged || 
+      (this.#renderState?.playerType === 'gm' && !this.#renderState.hasInspiration) ||
+      (this.#renderState?.playerType === 'player' && this.#renderState.hasInspiration)
+
+    if (render) {
+      const inspired = this.#renderState.hasInspiration;
+      this.#shadow.append(new DOMParser().parseFromString(/*html*/`
+        <div class="wrapper${inspired ? ' active' : ''}">
+          ${inspired ? 'Inspired' : 'Not inspired'}
+          <span class="inspiration" title="Toggle inspiration"></span>
+        </div>
+      `, 'text/html').querySelector('.wrapper'));
+    }
+    
+    const inspiration = this.#shadow.querySelector('.inspiration')
+    if (inspiration) {
+      let disabled = false;
+      inspiration.addEventListener('click', async () => {
+        if (disabled) {
+          return;
         }
-        break;
-      }
-      case 'player': {
-        if (this.#renderState.hasInspiration) {
-          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-            <div class="wrapper player">
-              Consume inspiration & reroll lowest d20
-              <span class="inspiration active"></span>
-            </div>
-          `, 'text/html').querySelector('.wrapper'));
+        try {
+          disabled = true;
+          this.#stateChanged = true;
+          await this.#actor.update({
+            system: {
+              attributes: {
+                inspiration: !this.#actor.system.attributes.inspiration
+              }
+            }
+          });
+          this.#stateChanged = true;
+          this.#calcRenderState();
+          this.#execRender();
+        } finally {
+          disabled = false;
         }
-        break;
-      }
+      })
     }
 
     this.#renderStateChanged = false;
