@@ -20,8 +20,6 @@ styleSheet.replaceSync(/*css*/`
     text-align: center;
     font-size: var(--font-size-11);
     font-family: var(--dnd5e-font-roboto);
-
-    cursor: pointer;
   }
 
   .inspiration {
@@ -54,21 +52,10 @@ styleSheet.replaceSync(/*css*/`
     color: #999;
   }
 
-  .player:hover {
-    background-color: rgb(166, 219, 166);
-    border-color: rgb(60, 151, 9);
-    color: rgb(85, 85, 85);
-  }
-
   .gm {
     background-color: #FEE;
     border: 1px solid #EDD;
     color: #A66;
-  }
-
-  .gm:hover {
-    background-color: rgb(245, 214, 214);
-    border-color: #D06767;
   }
 `);
 
@@ -237,7 +224,7 @@ export class InspirationElement extends HTMLElement {
         if (!this.#renderState.hasInspiration) {
           this.#shadow.append(new DOMParser().parseFromString(/*html*/`
             <div class="wrapper gm">
-              Reactivate inspiration & reroll highest d20
+              Not inspired
               <span class="inspiration"></span>
             </div>
           `, 'text/html').querySelector('.wrapper'));
@@ -248,7 +235,7 @@ export class InspirationElement extends HTMLElement {
         if (this.#renderState.hasInspiration) {
           this.#shadow.append(new DOMParser().parseFromString(/*html*/`
             <div class="wrapper player">
-              Consume inspiration & reroll lowest d20
+              Inspired
               <span class="inspiration active"></span>
             </div>
           `, 'text/html').querySelector('.wrapper'));
