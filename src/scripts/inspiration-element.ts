@@ -21,6 +21,17 @@ styleSheet.replaceSync(/*css*/`
     font-size: var(--font-size-11);
     font-family: var(--dnd5e-font-roboto);
   }
+  
+  .wrapper.active {
+    background-color: #EFE;
+    border: 1px solid #DDD;
+    color: #999;
+  }
+  .wrapper:not(.active) {
+    background-color: #FEE;
+    border: 1px solid #EDD;
+    color: #A66;
+  }
 
   .inspiration {
     --size: calc(var(--font-size-11) * 2);
@@ -35,27 +46,21 @@ styleSheet.replaceSync(/*css*/`
     display: grid;
     place-content: center;
     transform: translate(-25%, -50%);
+    cursor: pointer;
+  }
+  
+  .inspiration:hover {
+    box-shadow: none;
+    filter: drop-shadow(0 3px 4px rgba(255, 255, 255, 0.5));
   }
 
-  .inspiration.active::after {
+  .active .inspiration::after {
     content: "";
     width: calc(var(--size) / 4 - 1px);
     height: calc(var(--size) / 4 - 1px);
     background: white;
     transform: rotate(45deg);
     box-shadow: 0 0 8px 3px var(--color-shadow-highlight);
-  }
-  
-  .player {
-    background-color: #EFE;
-    border: 1px solid #DDD;
-    color: #999;
-  }
-
-  .gm {
-    background-color: #FEE;
-    border: 1px solid #EDD;
-    color: #A66;
   }
 `);
 
@@ -191,7 +196,7 @@ export class InspirationElement extends HTMLElement {
     let newState: RenderState;
     if (this.#msg == null || this.#actor == null) {
       newState = null;
-    } else if (!this.#actor.testUserPermission(game.user, 'OBSERVER')) {
+    } else if (!this.#actor.testUserPermission(game.user, 'OWNER')) {
       newState = null;
     } else if (this.#actor.type !== 'character') {
       newState = null;
@@ -208,6 +213,7 @@ export class InspirationElement extends HTMLElement {
     this.#renderState = newState;
   }
 
+  #stateChanged = false;
   #shadow: ShadowRoot;
   #execRender(): void {
     if (!this.#renderStateChanged) {
@@ -219,29 +225,44 @@ export class InspirationElement extends HTMLElement {
     }
     this.#shadow.innerHTML = '';
 
-    switch (this.#renderState?.playerType) {
-      case 'gm': {
-        if (!this.#renderState.hasInspiration) {
-          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-            <div class="wrapper gm">
-              Not inspired
-              <span class="inspiration"></span>
-            </div>
-          `, 'text/html').querySelector('.wrapper'));
+    const render = this.#stateChanged || 
+      (this.#renderState?.playerType === 'gm' && !this.#renderState.hasInspiration) ||
+      (this.#renderState?.playerType === 'player' && this.#renderState.hasInspiration)
+
+    if (render) {
+      const inspired = this.#renderState.hasInspiration;
+      this.#shadow.append(new DOMParser().parseFromString(/*html*/`
+        <div class="wrapper${inspired ? ' active' : ''}">
+          ${inspired ? 'Inspired' : 'Not inspired'}
+          <span class="inspiration" title="Toggle inspiration"></span>
+        </div>
+      `, 'text/html').querySelector('.wrapper'));
+    }
+    
+    const inspiration = this.#shadow.querySelector('.inspiration')
+    if (inspiration) {
+      let disabled = false;
+      inspiration.addEventListener('click', async () => {
+        if (disabled) {
+          return;
         }
-        break;
-      }
-      case 'player': {
-        if (this.#renderState.hasInspiration) {
-          this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-            <div class="wrapper player">
-              Inspired
-              <span class="inspiration active"></span>
-            </div>
-          `, 'text/html').querySelector('.wrapper'));
+        try {
+          disabled = true;
+          this.#stateChanged = true;
+          await this.#actor.update({
+            system: {
+              attributes: {
+                inspiration: !this.#actor.system.attributes.inspiration
+              }
+            }
+          });
+          this.#stateChanged = true;
+          this.#calcRenderState();
+          this.#execRender();
+        } finally {
+          disabled = false;
         }
-        break;
-      }
+      })
     }
 
     this.#renderStateChanged = false;

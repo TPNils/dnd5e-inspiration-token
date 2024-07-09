@@ -8,6 +8,7 @@ export interface ChatMessageV11 extends Omit<ChatMessage, 'data', 'roll'>, Omit<
 export interface ActorV11 {
   type: string;
   uuid: string;
+  update(data: any, options?: any): Promise<void>
   testUserPermission(user: User, permission: keyof typeof CONST.DOCUMENT_PERMISSION_LEVELS, options?: {exact?: boolean;})
   readonly system: {
     [key: string]: any;
