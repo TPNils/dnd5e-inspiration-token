@@ -136,7 +136,7 @@ export class InspirationElement extends HTMLElement {
       }
     }
 
-    this.#renderStateChanged = this.#renderStateChanged || Object.keys(diffObject(this.#renderState ?? {}, newState ?? {})).length !== 0;
+    this.#renderStateChanged = this.#renderStateChanged || !objectsEqual(this.#renderState, newState)
     this.#renderState = newState;
   }
 
