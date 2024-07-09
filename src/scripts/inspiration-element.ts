@@ -9,6 +9,7 @@ interface RenderState {
 const styleSheet = new CSSStyleSheet();
 styleSheet.replaceSync(/*css*/`
   .wrapper {
+    position: relative;
     width: auto;
     height: auto;
     padding: 10px;
@@ -21,6 +22,30 @@ styleSheet.replaceSync(/*css*/`
     font-family: var(--dnd5e-font-roboto);
 
     cursor: pointer;
+  }
+
+  .inspiration {
+    --size: calc(var(--font-size-11) * 2);
+    padding: 0;
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: var(--size);
+    height: var(--size);
+    background: transparent url("/systems/dnd5e/ui/inspiration.webp") no-repeat center / contain;
+    filter: drop-shadow(0 3px 4px var(--dnd5e-shadow-45));
+    display: grid;
+    place-content: center;
+    transform: translate(-25%, -50%);
+  }
+
+  .inspiration.active::after {
+    content: "";
+    width: calc(var(--size) / 4 - 1px);
+    height: calc(var(--size) / 4 - 1px);
+    background: white;
+    transform: rotate(45deg);
+    box-shadow: 0 0 8px 3px var(--color-shadow-highlight);
   }
   
   .player {
@@ -134,6 +159,7 @@ export class InspirationElement extends HTMLElement {
           this.#shadow.append(new DOMParser().parseFromString(/*html*/`
             <div class="wrapper gm">
               Reactivate inspiration & reroll highest d20
+              <span class="inspiration"></span>
             </div>
           `, 'text/html').querySelector('.wrapper'));
         }
@@ -144,6 +170,7 @@ export class InspirationElement extends HTMLElement {
           this.#shadow.append(new DOMParser().parseFromString(/*html*/`
             <div class="wrapper player">
               Consume inspiration & reroll lowest d20
+              <span class="inspiration active"></span>
             </div>
           `, 'text/html').querySelector('.wrapper'));
         }
