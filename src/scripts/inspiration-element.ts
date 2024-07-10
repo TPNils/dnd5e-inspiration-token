@@ -228,6 +228,11 @@ export class InspirationElement extends HTMLElement {
           }
         }
       }
+      UtilsLog.debug(this.#msg._id, {
+        d20Terms,
+        actor: this.#actor.testUserPermission(game.user, 'OWNER'),
+        msg: this.#msg.canUserModify(game.user, 'update'),
+      })
       if (d20Terms === 0) {
         newState = null;
       } else {
@@ -268,7 +273,7 @@ export class InspirationElement extends HTMLElement {
     UtilsLog.debug(this.#renderState.toggledTo, inspired)
     if (render) {
       this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && !this.#renderState.toggledTo == null ? ' interactive' : ''}">
+        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && this.#renderState.toggledTo == null ? ' interactive' : ''}">
           ${this.#renderState.toggledTo == null ? `${inspired ? 'Inspired' : 'Not inspired'}` : `${this.#renderState.toggledTo ? 'Disadvantage imposed' : 'Advantage applied'}`}
           <span class="inspiration"></span>
         </div>
@@ -288,7 +293,7 @@ export class InspirationElement extends HTMLElement {
           let newRollFormula: string;
           if (inspired) {
             // Add advantage
-            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dl?)([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
+            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
               return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
             });
           } else {
