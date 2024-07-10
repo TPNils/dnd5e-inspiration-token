@@ -262,7 +262,7 @@ export class InspirationElement extends HTMLElement {
       this.#shadow = this.attachShadow({mode: 'closed'});
       this.#shadow.adoptedStyleSheets = [styleSheet];
       const wrapper = new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper">
+        <div class="wrapper hidden">
           <span class="text"></span>
           <span class="inspiration"></span>
         </div>
@@ -278,17 +278,37 @@ export class InspirationElement extends HTMLElement {
       text.innerHTML = '';
       return;
     }
-    if (this.#renderState.playerType === 'player' && this.#renderState.toggledTo == null && !this.#renderState.hasInspiration) {
-      wrapper.setAttribute('class', 'wrapper hidden');
-      text.innerHTML = '';
-      return;
+
+    let innerText: string;
+    if (this.#renderState.toggledTo == null) {
+      if (this.#renderState.playerType === 'player') {
+        if (this.#renderState.hasInspiration) {
+          innerText = 'Inspired';
+        } else {
+          // TODO on nat 20, gain inspiration
+        }
+      } else if (this.#renderState.playerType === 'gm') {
+        if (this.#renderState.hasInspiration) {
+          // TODO  on nat 1, give inspiration
+        } else {
+          innerText = 'Not inspired';
+        }
+      }
+    } else {
+      if (this.#renderState.toggledTo) {
+        innerText = 'Disadvantage applied';
+      } else {
+        innerText = 'Advantage applied';
+      }
     }
-    if (this.#renderState.playerType === 'gm' && this.#renderState.toggledTo == null && this.#renderState.hasInspiration) {
+    
+    if (!innerText) {
       wrapper.setAttribute('class', 'wrapper hidden');
       text.innerHTML = '';
       return;
     }
     wrapper.classList.remove('hidden');
+    text.innerText = innerText;
 
     // Can't edit if a change already happened
     if (this.#canInteract()) {
@@ -301,20 +321,6 @@ export class InspirationElement extends HTMLElement {
       wrapper.classList.add('active');
     } else {
       wrapper.classList.remove('active');
-    }
-
-    if (this.#renderState.toggledTo == null) {
-      if (this.#renderState.hasInspiration) {
-        text.innerText = 'Inspired';
-      } else {
-        text.innerText = 'Not inspired';
-      }
-    } else {
-      if (this.#renderState.toggledTo) {
-        text.innerText = 'Disadvantage imposed';
-      } else {
-        text.innerText = 'Advantage applied';
-      }
     }
   }
 
