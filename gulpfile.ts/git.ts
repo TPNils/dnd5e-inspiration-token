@@ -108,11 +108,11 @@ export class Git {
   }
 
   public async validateCleanRepo(): Promise<void> {
-    // const cmd = await cli.execPromise('git status --porcelain');
-    // cli.throwIfError(cmd);
-    // if (typeof cmd.stdout === 'string' && cmd.stdout.length > 0) {
-    //   throw new Error("You must first commit your pending changes");
-    // }
+    const cmd = await cli.execPromise('git status --porcelain');
+    cli.throwIfError(cmd);
+    if (typeof cmd.stdout === 'string' && cmd.stdout.length > 0) {
+      throw new Error("You must first commit your pending changes");
+    }
   }
 
   public async commitNewVersion(): Promise<void> {
