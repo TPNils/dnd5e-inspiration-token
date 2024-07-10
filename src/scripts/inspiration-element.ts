@@ -284,6 +284,14 @@ export class InspirationElement extends HTMLElement {
         }
         try {
           disabled = true;
+          const confirm = await Dialog.confirm({
+            content: 'Are you sure?',
+            defaultYes: true,
+            rejectClose: true,
+          }).catch(() => false);
+          if (!confirm) {
+            return;
+          }
           const rollIndex = this.#msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
           let newRollFormula: string;
           if (inspired) {
