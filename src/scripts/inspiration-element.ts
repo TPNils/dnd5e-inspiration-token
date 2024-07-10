@@ -150,6 +150,13 @@ export class InspirationElement extends HTMLElement {
     this.#startRender();
   }
 
+  public disconnectedCallback(): void {
+    for (const documentListener of this.#documentListeners) {
+      documentListener.stop();
+    }
+    this.#documentListeners = [];
+  }
+
   #documentListeners: Stoppable[] = [];
   #msg: ChatMessageV11;
   #actor: ActorV11;
@@ -181,6 +188,7 @@ export class InspirationElement extends HTMLElement {
     for (const documentListener of this.#documentListeners) {
       documentListener.stop();
     }
+    this.#documentListeners = [];
 
     actorCallbacks.register((cbActor) => {
       if (cbActor.uuid === actor.uuid) {
@@ -287,8 +295,7 @@ export class InspirationElement extends HTMLElement {
           const confirm = await Dialog.confirm({
             content: 'Are you sure?',
             defaultYes: true,
-            rejectClose: true,
-          }).catch(() => false);
+          });
           if (!confirm) {
             return;
           }
