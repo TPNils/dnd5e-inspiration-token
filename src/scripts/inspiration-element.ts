@@ -228,11 +228,6 @@ export class InspirationElement extends HTMLElement {
           }
         }
       }
-      UtilsLog.debug(this.#msg._id, {
-        d20Terms,
-        actor: this.#actor.testUserPermission(game.user, 'OWNER'),
-        msg: this.#msg.canUserModify(game.user, 'update'),
-      })
       if (d20Terms === 0) {
         newState = null;
       } else {
@@ -270,7 +265,6 @@ export class InspirationElement extends HTMLElement {
       (this.#renderState?.playerType === 'player' && this.#renderState.hasInspiration)
 
     const inspired = this.#renderState.hasInspiration;
-    UtilsLog.debug(this.#renderState.toggledTo, inspired)
     if (render) {
       this.#shadow.append(new DOMParser().parseFromString(/*html*/`
         <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && this.#renderState.toggledTo == null ? ' interactive' : ''}">
