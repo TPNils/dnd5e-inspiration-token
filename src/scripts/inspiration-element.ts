@@ -1,3 +1,4 @@
+import { UtilsDiceSoNice } from "./rolling/utils-dice-so-nice.js";
 import { UtilsRoll } from "./rolling/utils-roll.js";
 import type { ActorV11, ChatMessageV11 } from "./types/types";
 import { UtilsLog } from "./utils-log.js";
@@ -301,6 +302,11 @@ export class InspirationElement extends HTMLElement {
           rolls[rollIndex] = modifiedRoll.result;
           await this.#msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !inspired}}});
           await this.#actor.update({system: { attributes: {inspiration: !inspired} } });
+          UtilsDiceSoNice.showRoll({
+            roll: modifiedRoll.rollToDisplay,
+            rollMode: this.#msg.blind ? 'blindroll' : null,
+            showUserIds: this.#msg.whisper.map(w => typeof w === 'string' ? w : w.id),
+          });
           this.#calcRenderState();
           this.#execRender();
         } finally {

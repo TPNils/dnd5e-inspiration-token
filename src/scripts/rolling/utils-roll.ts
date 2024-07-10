@@ -1,6 +1,71 @@
 import { ReusableDiceTerm } from "./reusable-dice-term.js";
 
+const validDamageTypes: string[] = ['' /* none */, 'acid', 'bludgeoning', 'cold', 'fire', 'force', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder', 'healing', 'temphp'];
+
 export class UtilsRoll {
+
+  /**
+   * @param value valid syntax: "fire" or "fire:comment"
+   * @returns the damage type or null if no match was found
+   */
+  public static toDamageType(value: any): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    value = value.toLowerCase();
+    const index = value.indexOf(':');
+    if (index !== -1) {
+      value = value.substring(0, index);
+    }
+    if (validDamageTypes.includes(value)) {
+      return value;
+    }
+    return null;
+  }
+
+
+  /**
+   * Example formula and how it gets parsed (this is based on how I believe it will be user friendly)
+   * 1d12 + 1d10[cold] + 1d8 + 1d6[fire: my comment] + 1d4 
+   *  everything unlisted inherits from the right 
+   *   => 1d12 & 1d10 = cold
+   *   => 1d8  & 1d6  = fire
+   *  Everything at the end which is unlisted inherits from the left
+   *   => 1d4 = fire
+   */
+  public static rollAlwaysWithDamageType(roll: Roll): Roll {
+    const damageFormulaMap = new Map<string, Array<string | number>>();
+
+    const terms = deepClone(roll.terms);
+    let latestDamageType: string | null = null;
+    damageFormulaMap.set(latestDamageType, []);
+    for (let i = terms.length-1; i >= 0; i--) {
+      const flavor = terms[i].options?.flavor?.toLowerCase();
+      const damageType = UtilsRoll.toDamageType(flavor);
+      if (damageType != null) {
+        if (!damageFormulaMap.has(damageType)) {
+          damageFormulaMap.set(damageType, []);
+        }
+        if (damageFormulaMap.has(null)) {
+          damageFormulaMap.get(damageType).push(...damageFormulaMap.get(null));
+          damageFormulaMap.delete(null);
+        }
+        latestDamageType = damageType;
+      }
+      if (terms[i].options == null) {
+        terms[i].options = {};
+      }
+      if (terms[i].options.flavor !== latestDamageType) {
+        if (terms[i].options.flavor) {
+          terms[i].options.flavor = `${latestDamageType}: ${terms[i].options.flavor}`
+        } else {
+          terms[i].options.flavor = latestDamageType;
+        }
+      }
+    }
+
+    return Roll.fromTerms(terms);
+  }
 
   /**
    * @param originalRoll The original roll where you wish to retain any existing roll results from
