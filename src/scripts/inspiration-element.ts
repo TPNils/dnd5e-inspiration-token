@@ -25,6 +25,10 @@ styleSheet.replaceSync(/*css*/`
     font-size: var(--font-size-11);
     font-family: var(--dnd5e-font-roboto);
   }
+
+  .hidden {
+    display: none;
+  }
   
   .wrapper.active {
     background-color: #EFE;
@@ -160,7 +164,6 @@ export class InspirationElement extends HTMLElement {
   #documentListeners: Stoppable[] = [];
   #msg: ChatMessageV11;
   #actor: ActorV11;
-  #renderStateChanged = false;
   #renderState: RenderState | null = null;
   #startRender(): Promise<void> {
     this.#msg = null;
@@ -244,93 +247,124 @@ export class InspirationElement extends HTMLElement {
           playerType: game.user.isGM ? 'gm' : 'player',
           hasInspiration: !!this.#actor.system.attributes.inspiration,
           // Interaction => currently only supports rerolling 1 d20 term, no UI for user selection which d20
-          canInteract: d20Terms === 1 && this.#actor.testUserPermission(game.user, 'OWNER') && this.#msg.canUserModify(game.user, 'update'),
+          canInteract: d20Terms === 1 && this.#actor.canUserModify(game.user, 'update') && this.#msg.canUserModify(game.user, 'update'),
           toggledTo: this.#msg.flags?.['dnd5e-inspiration-token']?.['toggledTo'],
         }
       }
     }
 
-    this.#renderStateChanged = this.#renderStateChanged || !objectsEqual(this.#renderState, newState);
     this.#renderState = newState;
   }
 
   #shadow: ShadowRoot;
   #execRender(): void {
-    if (!this.#renderStateChanged) {
-      return;
-    }
     if (this.#shadow == null) {
       this.#shadow = this.attachShadow({mode: 'closed'});
       this.#shadow.adoptedStyleSheets = [styleSheet];
-    }
-    this.#shadow.innerHTML = '';
-    const stateChanged = this.#renderState.toggledTo != null && (
-      (this.#renderState?.playerType === 'gm' && this.#renderState.hasInspiration) ||
-      (this.#renderState?.playerType === 'player' && !this.#renderState.hasInspiration)
-    )
-
-    const render = stateChanged || 
-      (this.#renderState?.playerType === 'gm' && !this.#renderState.hasInspiration) ||
-      (this.#renderState?.playerType === 'player' && this.#renderState.hasInspiration)
-
-    const inspired = this.#renderState.hasInspiration;
-    if (render) {
-      this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && this.#renderState.toggledTo == null ? ' interactive' : ''}">
-          ${this.#renderState.toggledTo == null ? `${inspired ? 'Inspired' : 'Not inspired'}` : `${this.#renderState.toggledTo ? 'Disadvantage imposed' : 'Advantage applied'}`}
+      const wrapper = new DOMParser().parseFromString(/*html*/`
+        <div class="wrapper">
+          <span class="text"></span>
           <span class="inspiration"></span>
         </div>
-      `, 'text/html').querySelector('.wrapper'));
+      `, 'text/html').querySelector('.wrapper');
+      wrapper.addEventListener('click', () => this.#onClick());
+
+      this.#shadow.append(wrapper);
+    }
+    const wrapper = this.#shadow.querySelector('.wrapper');
+    const text: HTMLSpanElement = this.#shadow.querySelector('.text');
+    if (this.#renderState == null) {
+      wrapper.setAttribute('class', 'wrapper hidden');
+      text.innerHTML = '';
+      return;
+    }
+    if (this.#renderState.playerType === 'player' && this.#renderState.toggledTo == null && !this.#renderState.hasInspiration) {
+      wrapper.setAttribute('class', 'wrapper hidden');
+      text.innerHTML = '';
+      return;
+    }
+    if (this.#renderState.playerType === 'gm' && this.#renderState.toggledTo == null && this.#renderState.hasInspiration) {
+      wrapper.setAttribute('class', 'wrapper hidden');
+      text.innerHTML = '';
+      return;
+    }
+    wrapper.classList.remove('hidden');
+
+    // Can't edit if a change already happened
+    if (this.#canInteract()) {
+      wrapper.classList.add('interactive');
+    } else {
+      wrapper.classList.remove('interactive');
     }
     
-    const interactive = this.#shadow.querySelector('.interactive')
-    if (interactive) {
-      let disabled = false;
-      interactive.addEventListener('click', async () => {
-        if (disabled) {
-          return;
-        }
-        try {
-          disabled = true;
-          const confirm = await Dialog.confirm({
-            content: 'Are you sure?',
-            defaultYes: true,
-          });
-          if (!confirm) {
-            return;
-          }
-          const rollIndex = this.#msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
-          let newRollFormula: string;
-          if (inspired) {
-            // Add advantage
-            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
-              return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
-            });
-          } else {
-            // Impose disadvantage
-            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
-              return `${Number(faces)+1}${d20}${dh ? dh + Number(dropHighestNr ?? '1')+1 : 'dh'}`;
-            });
-          }
-          const rolls = [...this.#msg.rolls];
-          const modifiedRoll = await UtilsRoll.modifyRoll(this.#msg.rolls[rollIndex], newRollFormula)
-          rolls[rollIndex] = modifiedRoll.result;
-          await this.#msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !inspired}}});
-          await this.#actor.update({system: { attributes: {inspiration: !inspired} } });
-          UtilsDiceSoNice.showRoll({
-            roll: modifiedRoll.rollToDisplay,
-            rollMode: this.#msg.blind ? 'blindroll' : null,
-            showUserIds: this.#msg.whisper.map(w => typeof w === 'string' ? w : w.id),
-          });
-          this.#calcRenderState();
-          this.#execRender();
-        } finally {
-          disabled = false;
-        }
-      })
+    if (this.#renderState.toggledTo == null ? this.#renderState.hasInspiration : !this.#renderState.toggledTo) {
+      wrapper.classList.add('active');
+    } else {
+      wrapper.classList.remove('active');
     }
 
-    this.#renderStateChanged = false;
+    if (this.#renderState.toggledTo == null) {
+      if (this.#renderState.hasInspiration) {
+        text.innerText = 'Inspired';
+      } else {
+        text.innerText = 'Not inspired';
+      }
+    } else {
+      if (this.#renderState.toggledTo) {
+        text.innerText = 'Disadvantage imposed';
+      } else {
+        text.innerText = 'Advantage applied';
+      }
+    }
+  }
+
+  #canInteract(): boolean {
+    return this.#renderState.canInteract && this.#renderState.toggledTo == null;
+  }
+
+  #clickDisabled = false;
+  async #onClick(): Promise<void> {
+    if (this.#clickDisabled || !this.#canInteract()) {
+      return;
+    }
+    try {
+      this.#clickDisabled = true;
+      const confirm = await Dialog.confirm({
+        content: 'Are you sure?',
+        defaultYes: true,
+      });
+      if (!confirm) {
+        return;
+      }
+      const inspired = this.#renderState.hasInspiration;
+      const rollIndex = this.#msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
+      let newRollFormula: string;
+      if (inspired) {
+        // Add advantage
+        newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
+          return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
+        });
+      } else {
+        // Impose disadvantage
+        newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
+          return `${Number(faces)+1}${d20}${dh ? dh + Number(dropHighestNr ?? '1')+1 : 'dh'}`;
+        });
+      }
+      const rolls = [...this.#msg.rolls];
+      const modifiedRoll = await UtilsRoll.modifyRoll(this.#msg.rolls[rollIndex], newRollFormula)
+      rolls[rollIndex] = modifiedRoll.result;
+      await this.#msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !inspired}}});
+      await this.#actor.update({system: { attributes: {inspiration: !inspired} } });
+      UtilsDiceSoNice.showRoll({
+        roll: modifiedRoll.rollToDisplay,
+        rollMode: this.#msg.blind ? 'blindroll' : null,
+        showUserIds: this.#msg.whisper.map(w => typeof w === 'string' ? w : w.id),
+      });
+      this.#calcRenderState();
+      this.#execRender();
+    } finally {
+      this.#clickDisabled = false;
+    }
   }
 
 }

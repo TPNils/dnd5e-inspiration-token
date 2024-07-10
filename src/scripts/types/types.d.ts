@@ -11,6 +11,7 @@ export interface ActorV11 {
   type: string;
   uuid: string;
   update(data: any, options?: any): Promise<void>;
+  canUserModify(user: User, permission: 'insert' | 'update' | 'delete'): boolean;
   testUserPermission(user: User, permission: keyof typeof CONST.DOCUMENT_PERMISSION_LEVELS, options?: {exact?: boolean;}): boolean;
   readonly system: {
     [key: string]: any;
