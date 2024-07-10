@@ -1,9 +1,12 @@
-import { ActorV11, ChatMessageV11 } from "./types/types";
+import { UtilsRoll } from "./rolling/utils-roll.js";
+import type { ActorV11, ChatMessageV11 } from "./types/types";
 import { UtilsLog } from "./utils-log.js";
 
 interface RenderState {
-  playerType: 'player' | 'gm',
-  hasInspiration: boolean,
+  playerType: 'player' | 'gm';
+  hasInspiration: boolean;
+  canInteract: boolean;
+  toggledTo: boolean | null | undefined;
 };
 
 const styleSheet = new CSSStyleSheet();
@@ -20,8 +23,6 @@ styleSheet.replaceSync(/*css*/`
     text-align: center;
     font-size: var(--font-size-11);
     font-family: var(--dnd5e-font-roboto);
-
-    cursor: pointer;
   }
   
   .wrapper.active {
@@ -35,13 +36,17 @@ styleSheet.replaceSync(/*css*/`
     color: #A66;
   }
 
-  .wrapper.active:hover {
+  .wrapper.interactive {
+    cursor: pointer;
+  }
+
+  .wrapper.interactive.active:hover {
     background-color: rgb(166, 219, 166);
     border-color: rgb(60, 151, 9);
     color: rgb(85, 85, 85);
   }
 
-  .wrapper:not(.active):hover {
+  .wrapper.interactive:not(.active):hover {
     background-color: rgb(245, 214, 214);
     border-color: #D06767;
   }
@@ -59,7 +64,6 @@ styleSheet.replaceSync(/*css*/`
     display: grid;
     place-content: center;
     transform: translate(-25%, -50%);
-    cursor: pointer;
   }
 
   .active .inspiration::after {
@@ -204,24 +208,43 @@ export class InspirationElement extends HTMLElement {
     let newState: RenderState;
     if (this.#msg == null || this.#actor == null) {
       newState = null;
-    } else if (!this.#actor.testUserPermission(game.user, 'OWNER')) {
+    } else if (!this.#actor.testUserPermission(game.user, 'OBSERVER')) {
       newState = null;
     } else if (this.#actor.type !== 'character') {
       newState = null;
-    } else if (!this.#msg.rolls.find(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0))) {
-      newState = null;
     } else {
-      newState = {
-        playerType: game.user.isGM ? 'gm' : 'player',
-        hasInspiration: !!this.#actor.system.attributes.inspiration,
+      let d20Terms = 0;
+      for (const roll of this.#msg.rolls) {
+        let pendingTerms = roll.terms;
+        while (pendingTerms.length > 0) {
+          const processingTerms = pendingTerms;
+          pendingTerms = [];
+          for (const term of processingTerms) {
+            if (term instanceof ParentheticalTerm) {
+              pendingTerms.push(...term.dice);
+            } else if (term instanceof DiceTerm && term.faces === 20 && term.number > 0) {
+              d20Terms++;
+            }
+          }
+        }
+      }
+      if (d20Terms === 0) {
+        newState = null;
+      } else {
+        newState = {
+          playerType: game.user.isGM ? 'gm' : 'player',
+          hasInspiration: !!this.#actor.system.attributes.inspiration,
+          // Interaction => currently only supports rerolling 1 d20 term, no UI for user selection which d20
+          canInteract: d20Terms === 1 && this.#actor.testUserPermission(game.user, 'OWNER') && this.#msg.canUserModify(game.user, 'update'),
+          toggledTo: this.#msg.flags?.['dnd5e-inspiration-token']?.['toggledTo'],
+        }
       }
     }
 
-    this.#renderStateChanged = this.#renderStateChanged || !objectsEqual(this.#renderState, newState)
+    this.#renderStateChanged = this.#renderStateChanged || !objectsEqual(this.#renderState, newState);
     this.#renderState = newState;
   }
 
-  #stateChanged = false;
   #shadow: ShadowRoot;
   #execRender(): void {
     if (!this.#renderStateChanged) {
@@ -232,39 +255,53 @@ export class InspirationElement extends HTMLElement {
       this.#shadow.adoptedStyleSheets = [styleSheet];
     }
     this.#shadow.innerHTML = '';
+    const stateChanged = this.#renderState.toggledTo != null && (
+      (this.#renderState?.playerType === 'gm' && this.#renderState.hasInspiration) ||
+      (this.#renderState?.playerType === 'player' && !this.#renderState.hasInspiration)
+    )
 
-    const render = this.#stateChanged || 
+    const render = stateChanged || 
       (this.#renderState?.playerType === 'gm' && !this.#renderState.hasInspiration) ||
       (this.#renderState?.playerType === 'player' && this.#renderState.hasInspiration)
 
+    const inspired = this.#renderState.hasInspiration;
+    UtilsLog.debug(this.#renderState.toggledTo, inspired)
     if (render) {
-      const inspired = this.#renderState.hasInspiration;
       this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper${inspired ? ' active' : ''}">
-          ${inspired ? 'Inspired' : 'Not inspired'}
-          <span class="inspiration" title="Toggle inspiration"></span>
+        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && !stateChanged ? ' interactive' : ''}">
+          ${this.#renderState.toggledTo == null ? `${inspired ? 'Inspired' : 'Not inspired'}` : `${this.#renderState.toggledTo ? 'Disadvantage imposed' : 'Advantage applied'}`}
+          <span class="inspiration"></span>
         </div>
       `, 'text/html').querySelector('.wrapper'));
     }
     
-    const inspiration = this.#shadow.querySelector('.inspiration')
-    if (inspiration) {
+    const interactive = this.#shadow.querySelector('.interactive')
+    if (interactive) {
       let disabled = false;
-      inspiration.addEventListener('click', async () => {
+      interactive.addEventListener('click', async () => {
         if (disabled) {
           return;
         }
         try {
           disabled = true;
-          this.#stateChanged = true;
-          await this.#actor.update({
-            system: {
-              attributes: {
-                inspiration: !this.#actor.system.attributes.inspiration
-              }
-            }
-          });
-          this.#stateChanged = true;
+          const rollIndex = this.#msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
+          let newRollFormula: string;
+          if (inspired) {
+            // Add advantage
+            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dl?)([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
+              return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
+            });
+          } else {
+            // Impose disadvantage
+            newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
+              return `${Number(faces)+1}${d20}${dh ? dh + Number(dropHighestNr ?? '1')+1 : 'dh'}`;
+            });
+          }
+          const rolls = [...this.#msg.rolls];
+          const modifiedRoll = await UtilsRoll.modifyRoll(this.#msg.rolls[rollIndex], newRollFormula)
+          rolls[rollIndex] = modifiedRoll.result;
+          await this.#msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !inspired}}});
+          await this.#actor.update({system: { attributes: {inspiration: !inspired} } });
           this.#calcRenderState();
           this.#execRender();
         } finally {

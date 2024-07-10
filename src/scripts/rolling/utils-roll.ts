@@ -1,4 +1,4 @@
-import { ReusableDiceTerm } from "./reusable-dice-term";
+import { ReusableDiceTerm } from "./reusable-dice-term.js";
 
 export class UtilsRoll {
 

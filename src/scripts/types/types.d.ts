@@ -3,13 +3,15 @@ import { ChatMessageDataConstructorData } from "@league-of-foundry-developers/fo
 export interface ChatMessageV11 extends Omit<ChatMessage, 'data', 'roll'>, Omit<ChatMessageDataConstructorData, 'roll'> {
   uuid: string;
   rolls: Roll[];
+  update(data: any, options?: any): Promise<void>;
+  canUserModify(user: User, permission: 'insert' | 'update' | 'delete'): boolean;
 }
 
 export interface ActorV11 {
   type: string;
   uuid: string;
-  update(data: any, options?: any): Promise<void>
-  testUserPermission(user: User, permission: keyof typeof CONST.DOCUMENT_PERMISSION_LEVELS, options?: {exact?: boolean;})
+  update(data: any, options?: any): Promise<void>;
+  testUserPermission(user: User, permission: keyof typeof CONST.DOCUMENT_PERMISSION_LEVELS, options?: {exact?: boolean;}): boolean;
   readonly system: {
     [key: string]: any;
     attributes: {
