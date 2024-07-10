@@ -268,7 +268,7 @@ export class InspirationElement extends HTMLElement {
     UtilsLog.debug(this.#renderState.toggledTo, inspired)
     if (render) {
       this.#shadow.append(new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && !stateChanged ? ' interactive' : ''}">
+        <div class="wrapper${(this.#renderState.toggledTo == null ? inspired : !this.#renderState.toggledTo) ? ' active' : ''}${this.#renderState.canInteract && !this.#renderState.toggledTo == null ? ' interactive' : ''}">
           ${this.#renderState.toggledTo == null ? `${inspired ? 'Inspired' : 'Not inspired'}` : `${this.#renderState.toggledTo ? 'Disadvantage imposed' : 'Advantage applied'}`}
           <span class="inspiration"></span>
         </div>
