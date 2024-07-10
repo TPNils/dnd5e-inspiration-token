@@ -1,7 +1,7 @@
 {
   "id": "dnd5e-inspiration-token",
   "title": "Inspiration token",
-  "version": "0.0.0",
+  "version": "1.1.0",
   "compatibility": {
     "minimum": "11",
     "verified": "12"
@@ -12,9 +12,9 @@
       "name": "TPNils"
     }
   ],
-  "url": "",
-  "manifest": "",
-  "download": "",
+  "url": "https://github.com/TPNils/dnd5e-inspiration-token",
+  "manifest": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/latest/module.json",
+  "download": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/v1.1.0/module.zip",
   "bugs": "",
   "esmodules": [
     "scripts/main.js"
