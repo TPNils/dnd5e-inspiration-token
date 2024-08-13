@@ -1,7 +1,6 @@
 import { UtilsDiceSoNice } from "./rolling/utils-dice-so-nice.js";
 import { UtilsRoll } from "./rolling/utils-roll.js";
 import type { ActorV11, ChatMessageV11 } from "./types/types";
-import { UtilsLog } from "./utils-log.js";
 
 interface RenderState {
   playerType: 'player' | 'gm';

@@ -1,6 +1,5 @@
 import { InspirationElement } from "./inspiration-element.js";
 import type { ChatMessageV11 } from "./types/types.js";
-import { UtilsLog } from "./utils-log.js";
 
 Hooks.on('renderChatMessage', (msg: ChatMessageV11, html: HTMLElement | JQuery, renderData: Readonly<object>) => {
   if (!(html instanceof HTMLElement)) {
