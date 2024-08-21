@@ -24,7 +24,7 @@
     "typescript": "^4.9.5"
   },
   "dependencies": {
-    "nils-library": "file:../nils-lib"
+    "nils-library": "github:TPNils/foundry-vtt-lib#v0.1.0"
   },
   "bundleDependencies": [
     "nils-library"
