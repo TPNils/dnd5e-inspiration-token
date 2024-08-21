@@ -283,7 +283,9 @@ export class InspirationElement implements OnInit {
       this._wrapperClasses.add('interactive');
     }
     
-    if (toggledTo == null ? this._hasInspiration : !toggledTo) {
+    if (inspirationGivenTo === this._actor.uuid) {
+      this._wrapperClasses.add('active');
+    } else if (toggledTo == null ? this._hasInspiration : !toggledTo) {
       this._wrapperClasses.add('active');
     }
   }
