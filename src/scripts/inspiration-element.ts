@@ -54,7 +54,7 @@ Hooks.on('updateChatMessage', (...args: Parameters<PostUpdateChatMessageCb>) => 
 
 @Component({
   tag: 'dnd5e-inspiration-token',
-  useShadowDom: true,
+  useShadowDom: 'closed',
   html: /*html*/`
     <div [class]="this.wrapperClasses" *if="this.showCard">
       <span class="text">{{this.cardText}}</span>
