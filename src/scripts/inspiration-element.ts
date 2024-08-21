@@ -1,88 +1,7 @@
 import { UtilsDiceSoNice } from "./rolling/utils-dice-so-nice.js";
 import { UtilsRoll } from "./rolling/utils-roll.js";
-import type { ActorV11, ChatMessageV11 } from "./types/types";
-
-interface RenderState {
-  playerType: 'player' | 'gm';
-  hasInspiration: boolean;
-  canInteract: boolean;
-  toggledTo: boolean | null | undefined;
-};
-
-const styleSheet = new CSSStyleSheet();
-styleSheet.replaceSync(/*css*/`
-  .wrapper {
-    position: relative;
-    width: auto;
-    height: auto;
-    padding: 10px;
-    margin-top: 0.25rem;
-    line-height: 1.8;
-    border-radius: 5px;
-    
-    text-align: center;
-    font-size: var(--font-size-11);
-    font-family: var(--dnd5e-font-roboto);
-  }
-
-  .hidden {
-    display: none;
-  }
-  
-  .wrapper.active {
-    background-color: #EFE;
-    border: 1px solid #DDD;
-    color: #999;
-  }
-  .wrapper:not(.active) {
-    background-color: #FEE;
-    border: 1px solid #EDD;
-    color: #A66;
-  }
-
-  .wrapper.interactive {
-    cursor: pointer;
-  }
-
-  .wrapper.interactive.active:hover {
-    background-color: rgb(166, 219, 166);
-    border-color: rgb(60, 151, 9);
-    color: rgb(85, 85, 85);
-  }
-
-  .wrapper.interactive:not(.active):hover {
-    background-color: rgb(245, 214, 214);
-    border-color: #D06767;
-  }
-
-  .inspiration {
-    --size: calc(var(--font-size-11) * 2);
-    padding: 0;
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: var(--size);
-    height: var(--size);
-    background: transparent url("/systems/dnd5e/ui/inspiration.webp") no-repeat center / contain;
-    filter: drop-shadow(0 3px 4px var(--dnd5e-shadow-45));
-    display: grid;
-    place-content: center;
-    transform: translate(-25%, -50%);
-  }
-
-  .active .inspiration::after {
-    content: "";
-    width: calc(var(--size) / 4 - 1px);
-    height: calc(var(--size) / 4 - 1px);
-    background: white;
-    transform: rotate(45deg);
-    box-shadow: 0 0 8px 3px var(--color-shadow-highlight);
-  }
-`);
-
-interface Stoppable {
-  stop: () => void;
-}
+import type { ActorV11, ChatMessageV11 } from "./types/types.js";
+import { BindEvent, Component, Stoppable, OnInit, OnInitParam } from "nils-library";
 
 class CallbackGroup<T extends Function> {
   #nextId = 0;
@@ -133,207 +52,220 @@ Hooks.on('updateChatMessage', (...args: Parameters<PostUpdateChatMessageCb>) => 
   }
 });
 
-export class InspirationElement extends HTMLElement {
-
-  public static get tag(): string {
-    return 'dnd5e-inspiration-token';
-  }
-
-
-  public static observedAttributes = [''];
-  public attributeChangedCallback(name: string, oldValue: string, newValue: string): void {
-    this.#startRender();
-  }
-
-  /**
-   * Invoked each time the custom element is appended into a document-connected element.
-   * This will happen each time the node is moved, and may happen before the element's contents have been fully parsed. 
-   */
-  public connectedCallback(): void {
-    this.#startRender();
-  }
-
-  public disconnectedCallback(): void {
-    for (const documentListener of this.#documentListeners) {
-      documentListener.stop();
+@Component({
+  tag: 'dnd5e-inspiration-token',
+  html: /*html*/`
+    <div [class]="this.wrapperClasses" *if="this.showCard">
+      <span class="text">{{this.cardText}}</span>
+      <span class="inspiration"></span>
+    </div>
+  `,
+  style: /*css*/`
+    .wrapper {
+      position: relative;
+      width: auto;
+      height: auto;
+      padding: 10px;
+      margin-top: 0.25rem;
+      line-height: 1.8;
+      border-radius: 5px;
+      
+      text-align: center;
+      font-size: var(--font-size-11);
+      font-family: var(--dnd5e-font-roboto);
     }
-    this.#documentListeners = [];
-  }
 
-  #documentListeners: Stoppable[] = [];
-  #msg: ChatMessageV11;
-  #actor: ActorV11;
-  #renderState: RenderState | null = null;
-  #startRender(): Promise<void> {
-    this.#msg = null;
-    this.#actor = null;
-    const msgId = this.closest(`[data-message-id]`)?.getAttribute('data-message-id');
+    .wrapper.active {
+      background-color: #EFE;
+      border: 1px solid #DDD;
+      color: #999;
+    }
+    .wrapper:not(.active) {
+      background-color: #FEE;
+      border: 1px solid #EDD;
+      color: #A66;
+    }
+
+    .wrapper.interactive {
+      cursor: pointer;
+    }
+
+    .wrapper.interactive.active:hover {
+      background-color: rgb(166, 219, 166);
+      border-color: rgb(60, 151, 9);
+      color: rgb(85, 85, 85);
+    }
+
+    .wrapper.interactive:not(.active):hover {
+      background-color: rgb(245, 214, 214);
+      border-color: #D06767;
+    }
+
+    .inspiration {
+      --size: calc(var(--font-size-11) * 2);
+      padding: 0;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: var(--size);
+      height: var(--size);
+      background: transparent url("/systems/dnd5e/ui/inspiration.webp") no-repeat center / contain;
+      filter: drop-shadow(0 3px 4px var(--dnd5e-shadow-45));
+      display: grid;
+      place-content: center;
+      transform: translate(-25%, -50%);
+    }
+
+    .active .inspiration::after {
+      content: "";
+      width: calc(var(--size) / 4 - 1px);
+      height: calc(var(--size) / 4 - 1px);
+      background: white;
+      transform: rotate(45deg);
+      box-shadow: 0 0 8px 3px var(--color-shadow-highlight);
+    }
+`
+})
+export class InspirationElement implements OnInit {
+
+  private _wrapperClasses = new Set<string>();
+  public get wrapperClasses(): string {
+    const classes = new Set<string>(this._wrapperClasses);
+    classes.add('wrapper');
+    return Array.from(classes).join(' ');
+  }
+  public text = '';
+  
+  public onInit(args: OnInitParam): void {
+    this._msg = null;
+    this._actor = null;
+    const msgId = args.html.closest(`[data-message-id]`)?.getAttribute('data-message-id');
     if (!msgId) {
-      this.#calcRenderState();
-      this.#execRender();
-      return;
-    }
-    const msg: ChatMessageV11 = game.messages.get(msgId) as any;
-    if (!msg) {
-      this.#calcRenderState();
-      this.#execRender();
       return;
     }
 
-    const actor: ActorV11 = game.scenes.get(msg.speaker.scene)?.tokens?.get(msg.speaker.token)?.actor || game.actors.get(msg.speaker.actor);
-    if (!actor) {
-      this.#calcRenderState();
-      this.#execRender();
-      return;
-    }
+    this._setMsg(game.messages.get(msgId) as any);
 
-    for (const documentListener of this.#documentListeners) {
-      documentListener.stop();
-    }
-    this.#documentListeners = [];
+    args.addStoppable(
+      actorCallbacks.register((cbActor) => {
+        if (cbActor.uuid === this._actor?.uuid) {
+          this._setActor(cbActor);
+        }
+      }),
 
-    actorCallbacks.register((cbActor) => {
-      if (cbActor.uuid === actor.uuid) {
-        this.#actor = cbActor;
-        this.#calcRenderState();
-        this.#execRender();
-      }
-    });
-
-    chatMessageCallbacks.register((cbMsg) => {
-      if (cbMsg.uuid === actor.uuid) {
-        this.#msg = cbMsg;
-        this.#calcRenderState();
-        this.#execRender();
-      }
-    });
-
-    this.#msg = msg;
-    this.#actor = actor;
-
-    this.#calcRenderState();
-    this.#execRender();
+      chatMessageCallbacks.register((cbMsg) => {
+        if (cbMsg.uuid === this._msg?.uuid) {
+          this._setMsg(cbMsg);
+        }
+      })
+    );
   }
 
-  #calcRenderState(): void {
-    let newState: RenderState;
-    if (this.#msg == null || this.#actor == null) {
-      newState = null;
-    } else if (!this.#actor.testUserPermission(game.user, 'OBSERVER')) {
-      newState = null;
-    } else if (this.#actor.type !== 'character') {
-      newState = null;
+  private _msg: ChatMessageV11;
+  private _setMsg(msg: ChatMessageV11): void {
+    this._msg = msg;
+    if (this._msg == null) {
+      if (this._actor != null) {
+        this._setActor(null);
+      }
     } else {
-      let d20Terms = 0;
-      for (const roll of this.#msg.rolls) {
-        let pendingTerms = roll.terms;
-        while (pendingTerms.length > 0) {
-          const processingTerms = pendingTerms;
-          pendingTerms = [];
-          for (const term of processingTerms) {
-            if (term instanceof ParentheticalTerm) {
-              pendingTerms.push(...term.dice);
-            } else if (term instanceof DiceTerm && term.faces === 20 && term.number > 0) {
-              d20Terms++;
-            }
+      const actor: ActorV11 = game.scenes.get(msg.speaker.scene)?.tokens?.get(msg.speaker.token)?.actor || game.actors.get(msg.speaker.actor);
+      if (this._actor?.uuid !== actor.uuid) {
+        this._setActor(actor);
+      }
+    }
+
+    this._calcFromCurrentState();
+  }
+
+  private _actor: ActorV11;
+  private _setActor(actor: ActorV11): void {
+    this._actor = actor;
+    this._calcFromCurrentState();
+  }
+
+  public cardText = '';
+  public showCard = false;
+  private _canInteract = false;
+  private _hasInspiration = false;
+  private _calcFromCurrentState(): void {
+    this.cardText = 'Placeholder';
+    this.showCard = false;
+    this._canInteract = false;
+    this._wrapperClasses = new Set();
+    
+    if (this._msg == null || this._actor == null) {
+      return;
+    } else if (!this._actor.testUserPermission(game.user, 'OBSERVER')) {
+      return;
+    } else if (this._actor.type !== 'character') {
+      return;
+    }
+
+    let d20Terms = 0;
+    for (const roll of this._msg.rolls) {
+      let pendingTerms = roll.terms;
+      while (pendingTerms.length > 0) {
+        const processingTerms = pendingTerms;
+        pendingTerms = [];
+        for (const term of processingTerms) {
+          if (term instanceof ParentheticalTerm) {
+            pendingTerms.push(...term.dice);
+          } else if (term instanceof DiceTerm && term.faces === 20 && term.number > 0) {
+            d20Terms++;
           }
         }
       }
-      if (d20Terms === 0) {
-        newState = null;
-      } else {
-        newState = {
-          playerType: game.user.isGM ? 'gm' : 'player',
-          hasInspiration: !!this.#actor.system.attributes.inspiration,
-          // Interaction => currently only supports rerolling 1 d20 term, no UI for user selection which d20
-          canInteract: d20Terms === 1 && this.#actor.canUserModify(game.user, 'update') && this.#msg.canUserModify(game.user, 'update'),
-          toggledTo: this.#msg.flags?.['dnd5e-inspiration-token']?.['toggledTo'],
-        }
-      }
     }
-
-    this.#renderState = newState;
-  }
-
-  #shadow: ShadowRoot;
-  #execRender(): void {
-    if (this.#shadow == null) {
-      this.#shadow = this.attachShadow({mode: 'closed'});
-      this.#shadow.adoptedStyleSheets = [styleSheet];
-      const wrapper = new DOMParser().parseFromString(/*html*/`
-        <div class="wrapper hidden">
-          <span class="text"></span>
-          <span class="inspiration"></span>
-        </div>
-      `, 'text/html').querySelector('.wrapper');
-      wrapper.addEventListener('click', () => this.#onClick());
-
-      this.#shadow.append(wrapper);
-    }
-    const wrapper = this.#shadow.querySelector('.wrapper');
-    const text: HTMLSpanElement = this.#shadow.querySelector('.text');
-    if (this.#renderState == null) {
-      wrapper.setAttribute('class', 'wrapper hidden');
-      text.innerHTML = '';
+    if (d20Terms === 0) {
       return;
     }
-
-    let innerText: string;
-    if (this.#renderState.toggledTo == null) {
-      if (this.#renderState.playerType === 'player') {
-        if (this.#renderState.hasInspiration) {
-          innerText = 'Inspired';
+    
+    const toggledTo: boolean | null | undefined = this._msg.flags?.['dnd5e-inspiration-token']?.['toggledTo'];
+    this.showCard = true;
+    this._canInteract = d20Terms === 1 && this._actor.canUserModify(game.user, 'update') && this._msg.canUserModify(game.user, 'update') && toggledTo == null;
+    this._hasInspiration = !!this._actor.system.attributes.inspiration;
+    
+    if (toggledTo == null) {
+      if (game.user.isGM) {
+        if (this._hasInspiration) {
+          // TODO on nat 1, give inspiration
+        } else {
+          this.cardText = 'Not inspired';
+        }
+      } else {
+        if (this._hasInspiration) {
+          this.cardText = 'Inspired';
         } else {
           // TODO on nat 20, gain inspiration
         }
-      } else if (this.#renderState.playerType === 'gm') {
-        if (this.#renderState.hasInspiration) {
-          // TODO  on nat 1, give inspiration
-        } else {
-          innerText = 'Not inspired';
-        }
       }
     } else {
-      if (this.#renderState.toggledTo) {
-        innerText = 'Disadvantage applied';
+      if (toggledTo) {
+        this.cardText = 'Disadvantage applied';
       } else {
-        innerText = 'Advantage applied';
+        this.cardText = 'Advantage applied';
       }
     }
-    
-    if (!innerText) {
-      wrapper.setAttribute('class', 'wrapper hidden');
-      text.innerHTML = '';
-      return;
-    }
-    wrapper.classList.remove('hidden');
-    text.innerText = innerText;
 
-    // Can't edit if a change already happened
-    if (this.#canInteract()) {
-      wrapper.classList.add('interactive');
-    } else {
-      wrapper.classList.remove('interactive');
+    if (this._canInteract) {
+      this._wrapperClasses.add('interactive');
     }
     
-    if (this.#renderState.toggledTo == null ? this.#renderState.hasInspiration : !this.#renderState.toggledTo) {
-      wrapper.classList.add('active');
-    } else {
-      wrapper.classList.remove('active');
+    if (toggledTo == null ? this._hasInspiration : !toggledTo) {
+      this._wrapperClasses.add('active');
     }
   }
 
-  #canInteract(): boolean {
-    return this.#renderState.canInteract && this.#renderState.toggledTo == null;
-  }
 
-  #clickDisabled = false;
-  async #onClick(): Promise<void> {
-    if (this.#clickDisabled || !this.#canInteract()) {
+  private _clickDisabled = false;
+  @BindEvent('click')
+  public async onClick(): Promise<void> {
+    if (this._clickDisabled || !this._canInteract) {
       return;
     }
     try {
-      this.#clickDisabled = true;
+      this._clickDisabled = true;
       const confirm = await Dialog.confirm({
         content: 'Are you sure?',
         defaultYes: true,
@@ -341,37 +273,32 @@ export class InspirationElement extends HTMLElement {
       if (!confirm) {
         return;
       }
-      const inspired = this.#renderState.hasInspiration;
-      const rollIndex = this.#msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
+      const rollIndex = this._msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
       let newRollFormula: string;
-      if (inspired) {
+      if (this._hasInspiration) {
         // Add advantage
-        newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
+        newRollFormula = this._msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
           return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
         });
       } else {
         // Impose disadvantage
-        newRollFormula = this.#msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
+        newRollFormula = this._msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
           return `${Number(faces)+1}${d20}${dh ? dh + Number(dropHighestNr ?? '1')+1 : 'dh'}`;
         });
       }
-      const rolls = [...this.#msg.rolls];
-      const modifiedRoll = await UtilsRoll.modifyRoll(this.#msg.rolls[rollIndex], newRollFormula)
+      const rolls = [...this._msg.rolls];
+      const modifiedRoll = await UtilsRoll.modifyRoll(this._msg.rolls[rollIndex], newRollFormula)
       rolls[rollIndex] = modifiedRoll.result;
-      await this.#msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !inspired}}});
-      await this.#actor.update({system: { attributes: {inspiration: !inspired} } });
+      await this._msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !this._hasInspiration}}});
+      await this._actor.update({system: { attributes: {inspiration: !this._hasInspiration} } });
       UtilsDiceSoNice.showRoll({
         roll: modifiedRoll.rollToDisplay,
-        rollMode: this.#msg.blind ? 'blindroll' : null,
-        showUserIds: this.#msg.whisper.map(w => typeof w === 'string' ? w : w.id),
+        rollMode: this._msg.blind ? 'blindroll' : null,
+        showUserIds: this._msg.whisper.map(w => typeof w === 'string' ? w : w.id),
       });
-      this.#calcRenderState();
-      this.#execRender();
     } finally {
-      this.#clickDisabled = false;
+      this._clickDisabled = false;
     }
   }
 
 }
-
-customElements.define(InspirationElement.tag, InspirationElement);

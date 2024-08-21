@@ -20,7 +20,13 @@
   "license": "GPL-3.0-only",
   "devDependencies": {
     "@league-of-foundry-developers/foundry-vtt-types": "^9.280.0",
-    "foundry-vtt-build-tools": "github:TPNils/foundry-vtt-build-tools#v0.1.8",
+    "foundry-vtt-build-tools": "github:TPNils/foundry-vtt-build-tools#685d75396ce3fba1f099ef60af99904498b34051",
     "typescript": "^4.9.5"
-  }
+  },
+  "dependencies": {
+    "nils-library": "file:../nils-lib"
+  },
+  "bundleDependencies": [
+    "nils-library"
+  ]
 }
