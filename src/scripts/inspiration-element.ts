@@ -1,7 +1,7 @@
 import { UtilsDiceSoNice } from "./rolling/utils-dice-so-nice.js";
 import { UtilsRoll } from "./rolling/utils-roll.js";
 import type { ActorV11, ChatMessageV11 } from "./types/types.js";
-import { BindEvent, Component, Stoppable, OnInit, OnInitParam } from "nils-library";
+import { BindEvent, Component, Stoppable, OnInit, OnInitParam, Attribute } from "nils-library";
 
 class CallbackGroup<T extends Function> {
   #nextId = 0;
@@ -54,6 +54,7 @@ Hooks.on('updateChatMessage', (...args: Parameters<PostUpdateChatMessageCb>) => 
 
 @Component({
   tag: 'dnd5e-inspiration-token',
+  useShadowDom: true,
   html: /*html*/`
     <div [class]="this.wrapperClasses" *if="this.showCard">
       <span class="text">{{this.cardText}}</span>
@@ -135,17 +136,13 @@ export class InspirationElement implements OnInit {
     return Array.from(classes).join(' ');
   }
   public text = '';
+
+  @Attribute({name: 'data-message-id', closest: true})
+  public set msgId(msgId: string) {
+    this._setMsg(game.messages.get(msgId) as any);
+  }
   
   public onInit(args: OnInitParam): void {
-    this._msg = null;
-    this._actor = null;
-    const msgId = args.html.closest(`[data-message-id]`)?.getAttribute('data-message-id');
-    if (!msgId) {
-      return;
-    }
-
-    this._setMsg(game.messages.get(msgId) as any);
-
     args.addStoppable(
       actorCallbacks.register((cbActor) => {
         if (cbActor.uuid === this._actor?.uuid) {
@@ -157,7 +154,7 @@ export class InspirationElement implements OnInit {
         if (cbMsg.uuid === this._msg?.uuid) {
           this._setMsg(cbMsg);
         }
-      })
+      }),
     );
   }
 
