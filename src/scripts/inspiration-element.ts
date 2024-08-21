@@ -186,12 +186,16 @@ export class InspirationElement implements OnInit {
 
   public cardText = '';
   public showCard = false;
-  private _canInteract = false;
+  private _interactAction: null | undefined | 'claimNat1' | 'useInsp' | 'imposeDisAdv';
   private _hasInspiration = false;
+  private _hasNat20 = false;
+  private _hasNat1 = false;
   private _calcFromCurrentState(): void {
-    this.cardText = 'Placeholder';
+    this.cardText = '';
     this.showCard = false;
-    this._canInteract = false;
+    this._interactAction = null;
+    this._hasNat20 = false;
+    this._hasNat1 = false;
     this._wrapperClasses = new Set();
     
     if (this._msg == null || this._actor == null) {
@@ -202,7 +206,7 @@ export class InspirationElement implements OnInit {
       return;
     }
 
-    let d20Terms = 0;
+    let d20Terms: DiceTerm[] = [];
     for (const roll of this._msg.rolls) {
       let pendingTerms = roll.terms;
       while (pendingTerms.length > 0) {
@@ -212,43 +216,73 @@ export class InspirationElement implements OnInit {
           if (term instanceof ParentheticalTerm) {
             pendingTerms.push(...term.dice);
           } else if (term instanceof DiceTerm && term.faces === 20 && term.number > 0) {
-            d20Terms++;
+            d20Terms.push(term);
           }
         }
       }
     }
-    if (d20Terms === 0) {
+    if (d20Terms.length === 0) {
       return;
+    }
+    for (const d20 of d20Terms) {
+      for (const result of d20.results) {
+        if (result.result === d20.faces) {
+          this._hasNat20 = true;
+        } else if (result.result === 1) {
+          this._hasNat1 = true;
+        }
+      }
     }
     
     const toggledTo: boolean | null | undefined = this._msg.flags?.['dnd5e-inspiration-token']?.['toggledTo'];
+    const inspirationGivenTo: string | null | undefined = this._msg.flags?.['dnd5e-inspiration-token']?.['givenTo'];
     this.showCard = true;
-    this._canInteract = d20Terms === 1 && this._actor.canUserModify(game.user, 'update') && this._msg.canUserModify(game.user, 'update') && toggledTo == null;
     this._hasInspiration = !!this._actor.system.attributes.inspiration;
-    
-    if (toggledTo == null) {
-      if (game.user.isGM) {
-        if (this._hasInspiration) {
-          // TODO on nat 1, give inspiration
-        } else {
-          this.cardText = 'Not inspired';
-        }
-      } else {
-        if (this._hasInspiration) {
-          this.cardText = 'Inspired';
-        } else {
-          // TODO on nat 20, gain inspiration
-        }
+
+    actionBlock: {
+      if (inspirationGivenTo === this._actor.uuid) {
+        this.cardText = 'Nat 1 = free inspiration (claimed)';
+        break actionBlock;
       }
-    } else {
-      if (toggledTo) {
+      if (toggledTo == true) {
         this.cardText = 'Disadvantage applied';
-      } else {
+        break actionBlock;
+      }
+      if (toggledTo == false) {
         this.cardText = 'Advantage applied';
+        break actionBlock;
+      }
+      if (!this._hasInspiration && this._hasNat1) {
+        this.cardText = 'Nat 1 = free inspiration';
+        break actionBlock;
+      }
+      
+      if (game.user.isGM) {
+        if (!this._hasInspiration) {
+          this.cardText = 'Not inspired';
+          break actionBlock;
+        } else if (this._hasNat1) {
+          // TODO
+          // this.cardText = 'Nat 1! Give a player inspiration!';
+        }
+      } else if (this._hasInspiration) {
+        this.cardText = 'Inspired';
+        break actionBlock;
+      }
+      this.showCard = false;
+    }
+    
+    if (d20Terms.length === 1 && this._actor.canUserModify(game.user, 'update') && this._msg.canUserModify(game.user, 'update') && toggledTo == null && inspirationGivenTo == null) {
+      if (!this._hasInspiration && this._hasNat1) {
+        this._interactAction = 'claimNat1';
+      } else if (this._hasInspiration) {
+        this._interactAction = 'useInsp';
+      } else {
+        this._interactAction = 'imposeDisAdv';
       }
     }
 
-    if (this._canInteract) {
+    if (this._interactAction != null) {
       this._wrapperClasses.add('interactive');
     }
     
@@ -257,30 +291,40 @@ export class InspirationElement implements OnInit {
     }
   }
 
-
   private _clickDisabled = false;
   @BindEvent('click')
   public async onClick(): Promise<void> {
-    if (this._clickDisabled || !this._canInteract) {
+    if (this._clickDisabled || this._interactAction == null || !this.showCard) {
       return;
     }
     try {
       this._clickDisabled = true;
       const confirm = await Dialog.confirm({
-        content: 'Are you sure?',
+        content:
+          this._interactAction === 'claimNat1' ? 'Claim your inspiration from rolling a nat 1?' : (
+          this._interactAction === 'useInsp' ? 'Use inspiration to reroll the lowest d20?' : (
+          this._interactAction === 'imposeDisAdv' ? 'Grant inspiration to reroll the highest d20?' :
+          'Are you sure?'
+          )),
         defaultYes: true,
       });
       if (!confirm) {
         return;
       }
+
+      if (this._interactAction === 'claimNat1') {
+        await this._msg.update({flags: {['dnd5e-inspiration-token']: {['givenTo']: this._actor.uuid}}});
+        await this._actor.update({system: { attributes: {inspiration: true} } });
+        return;
+      }
       const rollIndex = this._msg.rolls.findIndex(roll => roll.terms.find(term => term instanceof DiceTerm && term.faces === 20 && term.number > 0));
       let newRollFormula: string;
-      if (this._hasInspiration) {
+      if (this._interactAction === 'useInsp') {
         // Add advantage
         newRollFormula = this._msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(d(?:l|(?![a-z])))([0-9]*))?/i, (match, faces, d20, dl, dropLowestNr) => {
           return `${Number(faces)+1}${d20}${dl ? dl + Number(dropLowestNr ?? '1')+1 : 'dl'}`;
         });
-      } else {
+      } else if (this._interactAction === 'imposeDisAdv') {
         // Impose disadvantage
         newRollFormula = this._msg.rolls[rollIndex].formula.replace(/([0-9]*)(d20)(?:(dh)([0-9]*))?/i, (match, faces, d20, dh, dropHighestNr) => {
           return `${Number(faces)+1}${d20}${dh ? dh + Number(dropHighestNr ?? '1')+1 : 'dh'}`;
