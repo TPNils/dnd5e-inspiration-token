@@ -1,56 +1,8 @@
+import { HookManager } from "./hook-manager.js";
 import { UtilsDiceSoNice } from "./rolling/utils-dice-so-nice.js";
 import { UtilsRoll } from "./rolling/utils-roll.js";
 import type { ActorV11, ChatMessageV11 } from "./types/types.js";
 import { BindEvent, Component, Stoppable, OnInit, OnInitParam, Attribute } from "nils-library";
-
-class CallbackGroup<T extends Function> {
-  #nextId = 0;
-  #callbacks = new Map<number, T>();
-  
-  public register(callback: T): Stoppable {
-    const id = this.#nextId++;
-    this.#callbacks.set(id, callback);
-
-    return this.#getIUnregisterTrigger(id);
-  }
-
-  public getCallbacks(): Array<T> {
-    const callbackIds = Array.from(this.#callbacks.keys()).sort();
-    const callbacks = [];
-    for (const callbackId of callbackIds) {
-      callbacks.push(this.#callbacks.get(callbackId));
-    }
-    return callbacks;
-  }
-
-  public isEmpty(): boolean {
-    return this.#callbacks.size === 0;
-  }
-  
-  #getIUnregisterTrigger(id: number): Stoppable {
-    return {
-      stop: () => {
-        this.#callbacks.delete(id);
-      }
-    }
-  }
-}
-
-type PostUpdateActorCb = (actor: ActorV11, diff: object, options: object, userId: string) => void;
-const actorCallbacks = new CallbackGroup<PostUpdateActorCb>();
-Hooks.on('updateActor', (...args: Parameters<PostUpdateActorCb>) => {
-  for (const cb of actorCallbacks.getCallbacks()) {
-    cb(...args);
-  }
-});
-
-type PostUpdateChatMessageCb = (msg: ChatMessageV11, diff: object, options: object, userId: string) => void;
-const chatMessageCallbacks = new CallbackGroup<PostUpdateChatMessageCb>();
-Hooks.on('updateChatMessage', (...args: Parameters<PostUpdateChatMessageCb>) => {
-  for (const cb of chatMessageCallbacks.getCallbacks()) {
-    cb(...args);
-  }
-});
 
 @Component({
   tag: 'dnd5e-inspiration-token',
@@ -144,13 +96,13 @@ export class InspirationElement implements OnInit {
   
   public onInit(args: OnInitParam): void {
     args.addStoppable(
-      actorCallbacks.register((cbActor) => {
+      HookManager.updateActor((cbActor) => {
         if (cbActor.uuid === this._actor?.uuid) {
           this._setActor(cbActor);
         }
       }),
 
-      chatMessageCallbacks.register((cbMsg) => {
+      HookManager.updateChatMessage((cbMsg) => {
         if (cbMsg.uuid === this._msg?.uuid) {
           this._setMsg(cbMsg);
         }
