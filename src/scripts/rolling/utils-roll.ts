@@ -36,7 +36,7 @@ export class UtilsRoll {
   public static rollAlwaysWithDamageType(roll: Roll): Roll {
     const damageFormulaMap = new Map<string, Array<string | number>>();
 
-    const terms = deepClone(roll.terms);
+    const terms = foundry.utils.deepClone(roll.terms);
     let latestDamageType: string | null = null;
     damageFormulaMap.set(latestDamageType, []);
     for (let i = terms.length-1; i >= 0; i--) {
