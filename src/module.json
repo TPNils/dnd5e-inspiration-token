@@ -1,7 +1,7 @@
 {
   "id": "dnd5e-inspiration-token",
   "title": "Inspiration token",
-  "version": "v1.1.1",
+  "version": "v1.1.2",
   "compatibility": {
     "minimum": "12",
     "verified": "12"
@@ -13,8 +13,8 @@
     }
   ],
   "url": "https://github.com/TPNils/dnd5e-inspiration-token",
-  "manifest": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/v1.1.1/module.json",
-  "download": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/v1.1.1/module.zip",
+  "manifest": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/v1.1.2/module.json",
+  "download": "https://github.com/TPNils/dnd5e-inspiration-token/releases/download/v1.1.2/module.zip",
   "bugs": "",
   "flags": {
     "hbsFiles": []

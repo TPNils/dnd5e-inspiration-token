@@ -1,6 +1,6 @@
 {
   "name": "dnd5e-inspiration-token",
-  "version": "v1.1.1",
+  "version": "v1.1.2",
   "main": "index.js",
   "scripts": {
     "build": "foundry-vtt-build-tools build",
