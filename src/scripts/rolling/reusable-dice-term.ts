@@ -1,3 +1,5 @@
+import { Stoppable } from "nils-library";
+
 interface DiceTermResult extends DiceTerm.Result {
   notRolled?: boolean;
 }
@@ -10,108 +12,89 @@ export namespace ReusableDiceTerm {
   }
 }
 
-/**
- * Allow to change the number of dice, its modifiers and allowing to reevaluate it.
- */
-export class ReusableDiceTerm extends Die {
-
-  private static optionsStack: ReusableDiceTerm.Options[] = [];
-  private static originalDieRoll: Die['roll'];
-  private static originalDieEvaluate: Die['evaluate'];
-  public static pushOptions(options: ReusableDiceTerm.Options): void {
-    if (ReusableDiceTerm.optionsStack.length === 0) {
-      ReusableDiceTerm.originalDieRoll = Die.prototype.roll;
-      ReusableDiceTerm.originalDieEvaluate = Die.prototype.evaluate;
-      Die.prototype.roll = ReusableDiceTerm.prototype.roll;
-      Die.prototype.evaluate = ReusableDiceTerm.prototype.evaluate;
-    }
-    ReusableDiceTerm.optionsStack.push(options);
+declare global {
+  interface DiceTerm {
+    /**
+     * Maps a randomly-generated value in the interval [0, 1) to a face value on the die.
+     * @param  randomUniform  A value to map. Must be in the interval [0, 1).
+     * @returns               The face value.
+     */
+    mapRandomFace(randomUniform: number): number
+  
+    /**
+     * Generate a random face value for this die using the configured PRNG.
+     */
+    randomFace(): number;
   }
-  public static popOptions(): void {
-    ReusableDiceTerm.optionsStack.pop();
-    if (ReusableDiceTerm.optionsStack.length === 0) {
-      Die.prototype.roll = ReusableDiceTerm.originalDieRoll;
-      Die.prototype.evaluate = ReusableDiceTerm.originalDieEvaluate;
-    }
-  }
+}
 
-  private static getOptions(): ReusableDiceTerm.Options | null {
-    if (ReusableDiceTerm.optionsStack.length === 0) {
-      return null;
-    }
-    return ReusableDiceTerm.optionsStack[ReusableDiceTerm.optionsStack.length - 1];
-  }
 
-  public static SERIALIZE_ATTRIBUTES: string[] = [...Die.SERIALIZE_ATTRIBUTES];
+export namespace ReusableDiceTerm {
 
-  private deactivatedResults: number[] = [];
-  public evaluate(options?: Partial<RollTerm.EvaluationOptions & { async: false }>): this;
-  public evaluate(options: Partial<RollTerm.EvaluationOptions> & { async: true }): Promise<this>;
-  public evaluate(options: Partial<RollTerm.EvaluationOptions> = {}): this | Promise<this> {
-    if (this.number > 999) {
-      throw new Error(`You may not evaluate a DiceTerm with more than 999 requested results`);
-    }
-    this._evaluated = true;
-    this.deactivatedResults = this.results.filter((r: DiceTermResult) => !r.notRolled).map(r => r.result);
-    this.results = []; // Simply discard your results, assume all previously rolled dice are in MutableDiceTerm.getOptions()
-    for (let i = 0; i < this.number; i++) {
-      this.roll({minimize: options.minimize, maximize: options.maximize});
-    }
-    this._evaluateModifiers();
-    for (const deactivated of this.deactivatedResults) {
-      this.results.push({result: deactivated, active: false, discarded: true})
-    }
-    this.deactivatedResults = [];
-    
-    return options.async ? Promise.resolve(this) : this;
-  }
-
-  public roll(args: { minimize: boolean; maximize: boolean; } = {minimize: false, maximize: false}): DiceTerm.Result {
-    // Don't need to roll min or max rolls
-    if (args.minimize || args.maximize) {
-      const result: DiceTermResult = ReusableDiceTerm.originalDieRoll.call(this, args);
-      result.notRolled = true; // Track that this was never rolled and can be discarded on reroll (without min/max)
-      this.results.push(result);
-      return result;
-    }
-
-    // Recycle deactivated rolls => first find rolls listed specific for this roll
-    const options = ReusableDiceTerm.getOptions();
-    if (this.deactivatedResults.length > 0) {
-      const result: DiceTerm.Result = {
-        result: options.prerolledPool?.[String(this.faces)].splice(0, 1)[0],
-        active: true
-      };
-      this.results.push(result);
-      // Remove from global preroll, should have already been listed
-      const globalPrerolled: number[] = options?.prerolledPool?.[String(this.faces)];
-      if (globalPrerolled) {
-        const index = globalPrerolled.indexOf(result.result);
-        if (index !== -1) {
-          globalPrerolled.splice(index, 1);
+  export function wrapRoll<R extends Roll>(inputRoll: R, options: ReusableDiceTerm.Options): R {
+    const appendUnrolledRolls = (roll: R) => {
+      for (const [face, results] of Object.entries(options.prerolledPool)) {
+        if (results.length > 0) {
+          roll.terms.push(new OperatorTerm({operator: '+'}));
+          roll.terms.push(new Die({number: 0, faces: Number(face), results: results.map(r => ({result: r, discarded: true, active: false}))}));
         }
       }
-      return result;
     }
 
-    // Recycle deactivated rolls => fallback to 
-    if (options?.prerolledPool?.[String(this.faces)]?.length > 0) {
-      const result: DiceTerm.Result = {
-        result: options.prerolledPool?.[String(this.faces)].splice(0, 1)[0],
-        active: true
-      };
-      this.results.push(result);
-      return result;
-    }
-    const result = ReusableDiceTerm.originalDieRoll.call(this, args);
-    // MutableDiceTerm.originalDieRoll already adds result to this.results
-    if (options) {
-      if (options.newRolls[String(this.faces)] == null) {
-        options.newRolls[String(this.faces)] = [];
+    const wrapDiceTerms = (roll: R) => {
+      for (const term of roll.terms) {
+        if (term instanceof DiceTerm) {
+          const originalRandomFace = term.randomFace;
+          term.randomFace = function (this: DiceTerm, ...args: any[]): number {
+            const pool = options.prerolledPool?.[String(this.faces) as `${number}`];
+            if (pool?.length) {
+              const oldResult = pool.splice(0, 1)[0];
+              options.newRolls[`${this.faces}`] ??= [];
+              // TODO this is a placeholder result, should make this accurate
+              options.newRolls[`${this.faces}`].push({result: oldResult, active: true});
+              return oldResult;
+            }
+            return originalRandomFace.apply(this, args);
+          }
+          // @ts-ignore
+          term.randomFace.original = originalEvaluateFn;
+        }
       }
-      options.newRolls[String(this.faces)].push(result)
     }
-    return result;
+
+    const unwrapDiceTerms = (roll: R) => {
+      for (const term of roll.terms) {
+        if (term instanceof DiceTerm) {
+          // @ts-ignore
+          if (typeof term.randomFace.original === 'function') {
+            // @ts-ignore
+            term.randomFace = term.randomFace.original;
+          }
+        }
+      }
+    }
+
+    const originalEvaluateFn = inputRoll.evaluate;
+    inputRoll.evaluate = <any> function(this: R, ...args: Parameters<R['evaluate']>): ReturnType<R['evaluate']> {
+      wrapDiceTerms(this);
+      let response = originalEvaluateFn.apply(this, args);
+
+      if (response instanceof Promise) {
+        response = response.then(r => {
+          unwrapDiceTerms(this);
+          appendUnrolledRolls(this);
+          return r;
+        })
+      } else {
+        unwrapDiceTerms(this);
+        appendUnrolledRolls(this);
+      }
+
+      inputRoll.evaluate = originalEvaluateFn;
+      return response;
+    }
+
+    return inputRoll;
   }
-  
+
 }

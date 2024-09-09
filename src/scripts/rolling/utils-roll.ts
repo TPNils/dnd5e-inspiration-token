@@ -96,80 +96,73 @@ export class UtilsRoll {
       }
     }
 
-    try {
-      // Wrap dice to be mutable
-      ReusableDiceTerm.pushOptions(mutableDiceOptions);
-  
-      let rollResult = await UtilsRoll.#parseRollRequest(newRollOrFormula, true);
+    let rollResult = await UtilsRoll.#parseRollRequest(newRollOrFormula, true, mutableDiceOptions);
 
-      let termsToDisplay: RollTerm[] = []
-      for (const faceStr of Object.keys(mutableDiceOptions.newRolls) as `${number}`[]) {
-        let activeResults = 0;
-        for (const result of mutableDiceOptions.newRolls[faceStr]) {
-          if (result.active) {
-            activeResults++;
-          }
+    let termsToDisplay: RollTerm[] = []
+    for (const faceStr of Object.keys(mutableDiceOptions.newRolls) as `${number}`[]) {
+      let activeResults = 0;
+      for (const result of mutableDiceOptions.newRolls[faceStr]) {
+        if (result.active) {
+          activeResults++;
         }
-        termsToDisplay.push(new Die({
-          faces: Number(faceStr),
-          number: activeResults,
-          results: mutableDiceOptions.newRolls[faceStr],
-        }));
-        termsToDisplay.push(new OperatorTerm({operator: '+'}));
       }
-  
-      if (termsToDisplay.length > 0) {
-        termsToDisplay = termsToDisplay.splice(0, 1);
-        termsToDisplay = (await UtilsRoll.#rollUnrolledTerms(termsToDisplay, {async: true})).results;
-      }
+      termsToDisplay.push(new Die({
+        faces: Number(faceStr),
+        number: activeResults,
+        results: mutableDiceOptions.newRolls[faceStr],
+      }));
+      termsToDisplay.push(new OperatorTerm({operator: '+'}));
+    }
 
-      const allRolledResults: ReusableDiceTerm.Options['prerolledPool'] = {};
-      for (const term of rollResult.terms) {
-        if (term instanceof DiceTerm) {
-          const faces = String(term.faces);
-          if (!allRolledResults[faces]) {
-            allRolledResults[faces] = [];
-          }
-          for (const result of term.results) {
-            allRolledResults[faces].push(result.result);
-          }
-        }
-      }
-      // Any prerolledPool not consumed by mutable dice should be re-added
-      const unusedTerms: RollTerm[] = [];
-      for (const faces of Object.keys(mutableDiceOptions.prerolledPool) as `${number}`[]) {
-        if (mutableDiceOptions.prerolledPool[faces].length === 0) {
-          continue;
-        }
-        unusedTerms.push(new Die({
-          faces: Number(faces),
-          number: 0,
-          results: mutableDiceOptions.prerolledPool[faces].map(r => ({result: r, active: false, discarded: true}))
-        }))
-      }
+    if (termsToDisplay.length > 0) {
+      termsToDisplay = termsToDisplay.splice(0, 1);
+      termsToDisplay = (await UtilsRoll.#rollUnrolledTerms(termsToDisplay, {async: true})).results;
+    }
 
-      if (unusedTerms.length > 0) {
-        const terms = [...rollResult.terms];
-        if (terms.length > 0) {
-          terms.push(new OperatorTerm({operator: '+'}));
+    const allRolledResults: ReusableDiceTerm.Options['prerolledPool'] = {};
+    for (const term of rollResult.terms) {
+      if (term instanceof DiceTerm) {
+        const faces = String(term.faces);
+        if (!allRolledResults[faces]) {
+          allRolledResults[faces] = [];
         }
-        for (const unusedTerm of unusedTerms) {
-          terms.push(unusedTerm);
-          terms.push(new OperatorTerm({operator: '+'}));
+        for (const result of term.results) {
+          allRolledResults[faces].push(result.result);
         }
-        terms.pop(); // Remove the trailing '+'
-        rollResult = Roll.fromTerms((await UtilsRoll.#rollUnrolledTerms(terms, {async: true})).results);
       }
-      return {
-        result: rollResult,
-        rollToDisplay: termsToDisplay.length > 0 ? Roll.fromTerms(termsToDisplay) : null,
+    }
+    // Any prerolledPool not consumed by mutable dice should be re-added
+    const unusedTerms: RollTerm[] = [];
+    for (const faces of Object.keys(mutableDiceOptions.prerolledPool) as `${number}`[]) {
+      if (mutableDiceOptions.prerolledPool[faces].length === 0) {
+        continue;
       }
-    } finally {
-      ReusableDiceTerm.popOptions();
+      unusedTerms.push(new Die({
+        faces: Number(faces),
+        number: 0,
+        results: mutableDiceOptions.prerolledPool[faces].map(r => ({result: r, active: false, discarded: true}))
+      }))
+    }
+
+    if (unusedTerms.length > 0) {
+      const terms = [...rollResult.terms];
+      if (terms.length > 0) {
+        terms.push(new OperatorTerm({operator: '+'}));
+      }
+      for (const unusedTerm of unusedTerms) {
+        terms.push(unusedTerm);
+        terms.push(new OperatorTerm({operator: '+'}));
+      }
+      terms.pop(); // Remove the trailing '+'
+      rollResult = Roll.fromTerms((await UtilsRoll.#rollUnrolledTerms(terms, {async: true})).results);
+    }
+    return {
+      result: rollResult,
+      rollToDisplay: termsToDisplay.length > 0 ? Roll.fromTerms(termsToDisplay) : null,
     }
   }
 
-  static #parseRollRequest(newRollOrFormula: string | Roll | (() => Roll | Promise<Roll>), ensureEvaluated = false): Promise<Roll> {
+  static #parseRollRequest(newRollOrFormula: string | Roll | (() => Roll | Promise<Roll>), ensureEvaluated = false, options?: ReusableDiceTerm.Options): Promise<Roll> {
     let roll: Promise<Roll>;
     if (typeof newRollOrFormula === 'string') {
       roll = Promise.resolve(new Roll(newRollOrFormula));
@@ -181,6 +174,9 @@ export class UtilsRoll {
         result = Promise.resolve(result);
       }
       roll = result;
+    }
+    if (options) {
+      roll = roll.then(r => ReusableDiceTerm.wrapRoll(r, options));
     }
 
     if (ensureEvaluated) {
