@@ -137,14 +137,14 @@ export class InspirationElement implements OnInit {
   public showCard = false;
   private _interactAction: null | undefined | 'claimNat1' | 'useInsp' | 'imposeDisAdv';
   private _hasInspiration = false;
-  private _hasNat20 = false;
-  private _hasNat1 = false;
+  private _isNat20 = false;
+  private _isNat1 = false;
   private _calcFromCurrentState(): void {
     this.cardText = '';
     this.showCard = false;
     this._interactAction = null;
-    this._hasNat20 = false;
-    this._hasNat1 = false;
+    this._isNat20 = false;
+    this._isNat1 = false;
     this._wrapperClasses = new Set();
     
     if (this._msg == null || this._actor == null) {
@@ -155,7 +155,7 @@ export class InspirationElement implements OnInit {
       return;
     }
 
-    let d20Terms: DiceTerm[] = [];
+    let d20Terms: Array<Omit<DiceTerm, 'results'> & {results: Array<DiceTerm.Result & {'dnd5eInspirationToken-inspired'?: boolean}>}> = [];
     for (const roll of this._msg.rolls) {
       let pendingTerms = roll.terms;
       while (pendingTerms.length > 0) {
@@ -175,10 +175,13 @@ export class InspirationElement implements OnInit {
     }
     for (const d20 of d20Terms) {
       for (const result of d20.results) {
+        if (!result.active || result['dnd5eInspirationToken-inspired']) {
+          continue;
+        }
         if (result.result === d20.faces) {
-          this._hasNat20 = true;
+          this._isNat20 = true;
         } else if (result.result === 1) {
-          this._hasNat1 = true;
+          this._isNat1 = true;
         }
       }
     }
@@ -201,7 +204,7 @@ export class InspirationElement implements OnInit {
         this.cardText = 'Advantage applied';
         break actionBlock;
       }
-      if (!this._hasInspiration && this._hasNat1) {
+      if (!this._hasInspiration && this._isNat1) {
         this.cardText = 'Nat 1 = free inspiration';
         break actionBlock;
       }
@@ -210,7 +213,7 @@ export class InspirationElement implements OnInit {
         if (!this._hasInspiration) {
           this.cardText = 'Not inspired';
           break actionBlock;
-        } else if (this._hasNat1) {
+        } else if (this._isNat1) {
           // TODO
           // this.cardText = 'Nat 1! Give a player inspiration!';
         }
@@ -222,7 +225,7 @@ export class InspirationElement implements OnInit {
     }
     
     if (d20Terms.length === 1 && this._actor.canUserModify(game.user, 'update') && this._msg.canUserModify(game.user, 'update') && toggledTo == null && inspirationGivenTo == null) {
-      if (!this._hasInspiration && this._hasNat1) {
+      if (!this._hasInspiration && this._isNat1) {
         this._interactAction = 'claimNat1';
       } else if (this._hasInspiration) {
         this._interactAction = 'useInsp';
@@ -282,7 +285,24 @@ export class InspirationElement implements OnInit {
         });
       }
       const rolls = [...this._msg.rolls];
-      const modifiedRoll = await UtilsRoll.modifyRoll(this._msg.rolls[rollIndex], newRollFormula)
+      const modifiedRoll = await UtilsRoll.modifyRoll(this._msg.rolls[rollIndex], newRollFormula);
+      // Mark new terms
+      for (let termI = 0; termI < modifiedRoll.result.terms.length; termI++) {
+        const oldTerm = rolls[rollIndex].terms[termI];
+        if (!(oldTerm instanceof DiceTerm)) {
+          continue;
+        }
+        const newTerm = modifiedRoll.result.terms[termI];
+        if (!(newTerm instanceof DiceTerm)) {
+          continue;
+        }
+        for (let resultI = 0; resultI < newTerm.results.length; resultI++) {
+          if (oldTerm.results[resultI] != null) {
+            continue;
+          }
+          newTerm.results[resultI]['dnd5eInspirationToken-inspired'] = true;
+        }
+      }
       rolls[rollIndex] = modifiedRoll.result;
       await this._msg.update({rolls: rolls, flags: {['dnd5e-inspiration-token']: {['toggledTo']: !this._hasInspiration}}});
       await this._actor.update({system: { attributes: {inspiration: !this._hasInspiration} } });
