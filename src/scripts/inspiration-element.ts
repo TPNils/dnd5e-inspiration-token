@@ -66,7 +66,7 @@ import { BindEvent, Component, Stoppable, OnInit, OnInitParam, Attribute } from 
       filter: drop-shadow(0 3px 4px var(--dnd5e-shadow-45));
       display: grid;
       place-content: center;
-      transform: translate(-25%, -50%);
+      transform: translate(0, -50%);
     }
 
     .active .inspiration::after {
