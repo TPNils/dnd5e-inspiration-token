@@ -5,6 +5,7 @@
   "scripts": {
     "build": "foundry-vtt-build-tools build",
     "package": "foundry-vtt-build-tools buildZip",
+    "badges": "foundry-vtt-build-tools badges",
     "compileReadme": "foundry-vtt-build-tools compileReadme",
     "dev": "foundry-vtt-build-tools watch",
     "dev11": "foundry-vtt-build-tools watch -fi v11",
@@ -21,7 +22,7 @@
   "license": "GPL-3.0-only",
   "devDependencies": {
     "@league-of-foundry-developers/foundry-vtt-types": "^9.280.0",
-    "foundry-vtt-build-tools": "github:TPNils/foundry-vtt-build-tools#v0.3.0"
+    "foundry-vtt-build-tools": "github:TPNils/foundry-vtt-build-tools#v0.3.1"
   },
   "dependencies": {
     "nils-library": "github:TPNils/foundry-vtt-lib#v0.1.0"
