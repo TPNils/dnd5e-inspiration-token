@@ -47,7 +47,7 @@ jobs:
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
-        artifacts: './dist/module.json, ./package/module.zip'
+        artifacts: './dist/module.json'
         tag: latest
     
     # Create a release for this specific version
@@ -60,4 +60,4 @@ jobs:
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
-        artifacts: './dist/module.json'
+        artifacts: './dist/module.json, ./package/module.zip'
